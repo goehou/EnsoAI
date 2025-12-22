@@ -1,0 +1,133 @@
+import * as React from 'react';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectPopup,
+  SelectItem,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { GitBranch, Plus, Search, RefreshCw } from 'lucide-react';
+import type { GitBranch as GitBranchType } from '@shared/types';
+
+interface BranchSelectorProps {
+  branches: GitBranchType[];
+  currentBranch: string | null;
+  onCheckout: (branch: string) => void;
+  onCreateBranch?: (name: string, startPoint?: string) => void;
+  onRefresh?: () => void;
+  isLoading?: boolean;
+}
+
+export function BranchSelector({
+  branches,
+  currentBranch,
+  onCheckout,
+  onCreateBranch,
+  onRefresh,
+  isLoading,
+}: BranchSelectorProps) {
+  const [searchQuery, setSearchQuery] = React.useState('');
+
+  const localBranches = branches.filter(
+    (b) => !b.name.startsWith('remotes/') && b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const remoteBranches = branches.filter(
+    (b) => b.name.startsWith('remotes/') && b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleValueChange = (value: string | null) => {
+    if (value) {
+      onCheckout(value);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={currentBranch || ''} onValueChange={handleValueChange}>
+        <SelectTrigger className="w-48">
+          <GitBranch className="mr-2 h-4 w-4 shrink-0" />
+          <SelectValue>{currentBranch || '选择分支...'}</SelectValue>
+        </SelectTrigger>
+        <SelectPopup className="w-64">
+          {/* Search */}
+          <div className="p-2">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索分支..."
+                className="pl-8"
+              />
+            </div>
+          </div>
+
+          {/* Local branches */}
+          {localBranches.length > 0 && (
+            <>
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                本地分支
+              </div>
+              {localBranches.map((branch) => (
+                <SelectItem key={branch.name} value={branch.name}>
+                  <div className="flex items-center gap-2">
+                    {branch.current && (
+                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                    )}
+                    <span className="truncate">{branch.name}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </>
+          )}
+
+          {/* Remote branches */}
+          {remoteBranches.length > 0 && (
+            <>
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                远程分支
+              </div>
+              {remoteBranches.map((branch) => (
+                <SelectItem key={branch.name} value={branch.name}>
+                  <span className="truncate">{branch.name.replace('remotes/', '')}</span>
+                </SelectItem>
+              ))}
+            </>
+          )}
+
+          {/* Create new branch */}
+          {onCreateBranch && (
+            <>
+              <div className="my-1 border-t" />
+              <button
+                className="flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-accent"
+                onClick={() => {
+                  const name = prompt('输入新分支名:');
+                  if (name) onCreateBranch(name);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                创建新分支
+              </button>
+            </>
+          )}
+        </SelectPopup>
+      </Select>
+
+      {onRefresh && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 w-9 p-0"
+          onClick={onRefresh}
+          disabled={isLoading}
+        >
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+      )}
+    </div>
+  );
+}

@@ -44,6 +44,13 @@ export const IPC_CHANNELS = {
   // App
   APP_GET_PATH: 'app:getPath',
   APP_UPDATE_AVAILABLE: 'app:updateAvailable',
+
+  // Dialog
+  DIALOG_OPEN_DIRECTORY: 'dialog:openDirectory',
+  DIALOG_OPEN_FILE: 'dialog:openFile',
+
+  // Context Menu
+  CONTEXT_MENU_SHOW: 'contextMenu:show',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

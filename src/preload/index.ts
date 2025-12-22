@@ -120,6 +120,34 @@ const electronAPI = {
       return () => ipcRenderer.off(IPC_CHANNELS.APP_UPDATE_AVAILABLE, handler);
     },
   },
+
+  // Dialog
+  dialog: {
+    openDirectory: (): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_DIRECTORY),
+    openFile: (options?: {
+      filters?: Array<{ name: string; extensions: string[] }>;
+    }): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DIALOG_OPEN_FILE, options),
+  },
+
+  // Context Menu
+  contextMenu: {
+    show: (
+      items: Array<{
+        label: string;
+        id: string;
+        type?: 'normal' | 'separator';
+        disabled?: boolean;
+      }>
+    ): Promise<string | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_MENU_SHOW, items),
+  },
+
+  // Environment
+  env: {
+    HOME: process.env.HOME || process.env.USERPROFILE || '',
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

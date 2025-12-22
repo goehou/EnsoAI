@@ -10,15 +10,13 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "types": ["node"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/renderer/*"],
       "@shared/*": ["src/shared/*"]
     }
   },
-  "include": ["src/**/*"],
-  "references": [
-    { "path": "./tsconfig.node.json" },
-    { "path": "./tsconfig.web.json" }
-  ]
+  "include": ["src/**/*", "electron.vite.config.ts"]
 }

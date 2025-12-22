@@ -1,4 +1,6 @@
 import { cn } from '@/lib/utils';
+import { useWorkspaceStore } from '@/stores/workspace';
+import { WorkspaceSelector } from '@/components/workspace';
 import {
   GitBranchIcon,
   MessageSquareIcon,
@@ -6,6 +8,8 @@ import {
   GitCommitIcon,
   SettingsIcon,
 } from './Icons';
+import { Separator } from '@/components/ui/separator';
+import type { WorkspaceRecord } from '@shared/types';
 
 type TabId = 'worktrees' | 'chat' | 'files' | 'git' | 'settings';
 
@@ -23,29 +27,68 @@ const tabs: Array<{ id: TabId; label: string; icon: React.ElementType; shortcut:
 ];
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+  const { workspaces, currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
+
+  const handleSelectWorkspace = (workspace: WorkspaceRecord) => {
+    setCurrentWorkspace(workspace);
+  };
+
+  const handleCreateNewWorkspace = () => {
+    // TODO: Open create workspace dialog
+    console.log('Create new workspace');
+  };
+
+  const handleOpenFolder = async () => {
+    // TODO: Open folder picker via IPC
+    console.log('Open folder');
+  };
+
   return (
-    <aside className="flex w-16 flex-col items-center border-r bg-muted/30 py-4">
+    <aside className="flex w-60 flex-col border-r bg-muted/30">
       {/* Traffic light spacer for macOS */}
-      <div className="h-8 drag-region" />
+      <div className="h-12 shrink-0 drag-region" />
+
+      {/* Workspace Selector */}
+      <div className="shrink-0 px-2">
+        <WorkspaceSelector
+          workspaces={workspaces}
+          currentWorkspace={currentWorkspace}
+          onSelect={handleSelectWorkspace}
+          onCreateNew={handleCreateNewWorkspace}
+          onOpenFolder={handleOpenFolder}
+        />
+      </div>
+
+      <Separator className="my-2" />
 
       {/* Navigation */}
-      <nav className="flex flex-1 flex-col items-center gap-2">
+      <nav className="flex flex-1 flex-col gap-1 px-2">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              'flex h-10 w-10 items-center justify-center rounded-lg transition-colors no-drag',
+              'flex h-9 items-center gap-3 rounded-md px-3 text-sm transition-colors no-drag',
               activeTab === tab.id
-                ? 'bg-accent text-accent-foreground'
+                ? 'bg-accent text-accent-foreground font-medium'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}
             title={`${tab.label} (${tab.shortcut})`}
           >
-            <tab.icon className="h-5 w-5" />
+            <tab.icon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{tab.label}</span>
+            <kbd className="ml-auto text-xs opacity-50">{tab.shortcut}</kbd>
           </button>
         ))}
       </nav>
+
+      {/* Agent Status */}
+      <div className="shrink-0 border-t p-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-green-500" />
+          <span>Claude • Ready</span>
+        </div>
+      </div>
     </aside>
   );
 }

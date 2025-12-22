@@ -17,27 +17,39 @@ export function useWorktreeList(workdir: string | null) {
   });
 }
 
-export function useWorktreeAdd(workdir: string) {
+export function useWorktreeCreate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (options: WorktreeCreateOptions) => {
+    mutationFn: async ({
+      workdir,
+      options,
+    }: {
+      workdir: string;
+      options: WorktreeCreateOptions;
+    }) => {
       await window.electronAPI.worktree.add(workdir, options);
     },
-    onSuccess: () => {
+    onSuccess: (_, { workdir }) => {
       queryClient.invalidateQueries({ queryKey: ['worktree', 'list', workdir] });
     },
   });
 }
 
-export function useWorktreeRemove(workdir: string) {
+export function useWorktreeRemove() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (options: WorktreeRemoveOptions) => {
+    mutationFn: async ({
+      workdir,
+      options,
+    }: {
+      workdir: string;
+      options: WorktreeRemoveOptions;
+    }) => {
       await window.electronAPI.worktree.remove(workdir, options);
     },
-    onSuccess: () => {
+    onSuccess: (_, { workdir }) => {
       queryClient.invalidateQueries({ queryKey: ['worktree', 'list', workdir] });
     },
   });

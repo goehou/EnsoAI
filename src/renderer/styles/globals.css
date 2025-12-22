@@ -1,65 +1,104 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Menlo', monospace;
+
+  --animate-skeleton: skeleton 2s -1s infinite linear;
+
+  @keyframes skeleton {
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
 
 @layer base {
   :root {
-    --background: var(--color-white);
-    --foreground: var(--color-zinc-800);
-    --muted: --alpha(var(--color-black) / 4%);
-    --muted-foreground: color-mix(in srgb, var(--color-zinc-500) 90%, var(--color-black));
-    --accent: --alpha(var(--color-black) / 4%);
-    --accent-foreground: var(--color-zinc-800);
-    --border: --alpha(var(--color-black) / 12%);
-    --ring: var(--color-zinc-400);
-    --card: var(--color-white);
-    --card-foreground: var(--color-zinc-800);
-    --destructive: var(--color-red-500);
-    --destructive-foreground: var(--color-red-700);
-    --info: var(--color-blue-500);
-    --info-foreground: var(--color-blue-700);
-    --input: --alpha(var(--color-black) / 12%);
-    --popover: var(--color-white);
-    --popover-foreground: var(--color-zinc-800);
-    --primary: var(--color-zinc-800);
-    --primary-foreground: var(--color-zinc-50);
-    --secondary: --alpha(var(--color-black) / 4%);
-    --secondary-foreground: var(--color-zinc-800);
-    --success: var(--color-emerald-500);
-    --success-foreground: var(--color-emerald-700);
-    --warning: var(--color-amber-500);
-    --warning-foreground: var(--color-amber-700);
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0.014 285.82);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0.014 285.82);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0.014 285.82);
+    --primary: oklch(0.205 0.014 285.82);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.965 0.003 285.82);
+    --secondary-foreground: oklch(0.205 0.014 285.82);
+    --muted: oklch(0.965 0.003 285.82);
+    --muted-foreground: oklch(0.556 0.014 285.82);
+    --accent: oklch(0.965 0.003 285.82);
+    --accent-foreground: oklch(0.205 0.014 285.82);
+    --destructive: oklch(0.577 0.245 27.33);
+    --destructive-foreground: oklch(0.985 0 0);
+    --success: oklch(0.527 0.154 150.07);
+    --success-foreground: oklch(0.985 0 0);
+    --warning: oklch(0.769 0.189 70.08);
+    --warning-foreground: oklch(0.205 0.014 285.82);
+    --info: oklch(0.623 0.214 259.81);
+    --info-foreground: oklch(0.985 0 0);
+    --border: oklch(0.922 0.003 285.82);
+    --input: oklch(0.922 0.003 285.82);
+    --ring: oklch(0.708 0.014 285.82);
+    --radius: 0.5rem;
   }
 
   .dark {
-    --background: color-mix(in srgb, var(--color-zinc-950) 98%, var(--color-white));
-    --foreground: var(--color-zinc-200);
-    --muted: --alpha(var(--color-white) / 6%);
-    --muted-foreground: color-mix(in srgb, var(--color-zinc-500) 90%, var(--color-white));
-    --accent: --alpha(var(--color-white) / 6%);
-    --accent-foreground: var(--color-zinc-200);
-    --border: --alpha(var(--color-white) / 12%);
-    --ring: var(--color-zinc-500);
-    --card: color-mix(in srgb, var(--background) 98%, var(--color-white));
-    --card-foreground: var(--color-zinc-200);
-    --destructive: var(--color-red-500);
-    --destructive-foreground: var(--color-red-400);
-    --info: var(--color-blue-500);
-    --info-foreground: var(--color-blue-400);
-    --input: --alpha(var(--color-white) / 12%);
-    --popover: color-mix(in srgb, var(--background) 96%, var(--color-white));
-    --popover-foreground: var(--color-zinc-200);
-    --primary: var(--color-zinc-200);
-    --primary-foreground: var(--color-zinc-800);
-    --secondary: --alpha(var(--color-white) / 6%);
-    --secondary-foreground: var(--color-zinc-200);
-    --success: var(--color-emerald-500);
-    --success-foreground: var(--color-emerald-400);
-    --warning: var(--color-amber-500);
-    --warning-foreground: var(--color-amber-400);
-  }
-  .theme {
-    --animate-skeleton: skeleton 2s -1s infinite linear;
+    --background: oklch(0.145 0.014 285.82);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.145 0.014 285.82);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.145 0.014 285.82);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0.205 0.014 285.82);
+    --secondary: oklch(0.269 0.014 285.82);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0.014 285.82);
+    --muted-foreground: oklch(0.708 0.014 285.82);
+    --accent: oklch(0.269 0.014 285.82);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.396 0.141 25.72);
+    --destructive-foreground: oklch(0.985 0 0);
+    --success: oklch(0.527 0.154 150.07);
+    --success-foreground: oklch(0.985 0 0);
+    --warning: oklch(0.769 0.189 70.08);
+    --warning-foreground: oklch(0.205 0.014 285.82);
+    --info: oklch(0.623 0.214 259.81);
+    --info-foreground: oklch(0.985 0 0);
+    --border: oklch(0.269 0.014 285.82);
+    --input: oklch(0.269 0.014 285.82);
+    --ring: oklch(0.439 0.014 285.82);
   }
 }
 
@@ -97,13 +136,5 @@
 
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-muted-foreground/40;
-  }
-}
-
-@theme inline {
-  @keyframes skeleton {
-  to {
-    background-position: -200% 0;
-    }
   }
 }

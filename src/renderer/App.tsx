@@ -1,18 +1,341 @@
-import { useState } from 'react';
-import { Sidebar } from './components/layout/Sidebar';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { WorkspaceSidebar } from './components/layout/WorkspaceSidebar';
+import { WorktreePanel } from './components/layout/WorktreePanel';
 import { MainContent } from './components/layout/MainContent';
 import { useWorkspaceStore } from './stores/workspace';
+import { useWorktreeList, useWorktreeCreate, useWorktreeRemove } from './hooks/useWorktree';
+import { useGitBranches } from './hooks/useGit';
+import { PanelLeftClose, PanelLeft } from 'lucide-react';
+import type { GitWorktree, WorkspaceRecord, WorktreeCreateOptions } from '@shared/types';
 
-type TabId = 'worktrees' | 'chat' | 'files' | 'git' | 'settings';
+type TabId = 'chat' | 'file' | 'terminal' | 'source-control';
+
+interface Repository {
+  name: string;
+  path: string;
+}
+
+// Panel size constraints
+const WORKSPACE_MIN = 200;
+const WORKSPACE_MAX = 400;
+const WORKSPACE_DEFAULT = 240;
+const WORKTREE_MIN = 200;
+const WORKTREE_MAX = 400;
+const WORKTREE_DEFAULT = 280;
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabId>('worktrees');
-  const { currentWorkspace } = useWorkspaceStore();
+  const [activeTab, setActiveTab] = useState<TabId>('chat');
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [activeWorktree, setActiveWorktree] = useState<GitWorktree | null>(null);
+
+  // Panel sizes and collapsed states
+  const [workspaceWidth, setWorkspaceWidth] = useState(WORKSPACE_DEFAULT);
+  const [worktreeWidth, setWorktreeWidth] = useState(WORKTREE_DEFAULT);
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
+  const [worktreeCollapsed, setWorktreeCollapsed] = useState(false);
+
+  // Resize state
+  const [resizing, setResizing] = useState<'workspace' | 'worktree' | null>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+
+  const { workspaces, currentWorkspace, setCurrentWorkspace, setWorkspaces } = useWorkspaceStore();
+
+  // Load panel sizes from localStorage
+  useEffect(() => {
+    const savedWorkspaceWidth = localStorage.getItem('enso-workspace-width');
+    const savedWorktreeWidth = localStorage.getItem('enso-worktree-width');
+    const savedWorkspaceCollapsed = localStorage.getItem('enso-workspace-collapsed');
+    const savedWorktreeCollapsed = localStorage.getItem('enso-worktree-collapsed');
+
+    if (savedWorkspaceWidth) setWorkspaceWidth(Number(savedWorkspaceWidth));
+    if (savedWorktreeWidth) setWorktreeWidth(Number(savedWorktreeWidth));
+    if (savedWorkspaceCollapsed) setWorkspaceCollapsed(savedWorkspaceCollapsed === 'true');
+    if (savedWorktreeCollapsed) setWorktreeCollapsed(savedWorktreeCollapsed === 'true');
+  }, []);
+
+  // Save panel sizes to localStorage
+  useEffect(() => {
+    localStorage.setItem('enso-workspace-width', String(workspaceWidth));
+  }, [workspaceWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('enso-worktree-width', String(worktreeWidth));
+  }, [worktreeWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('enso-workspace-collapsed', String(workspaceCollapsed));
+  }, [workspaceCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem('enso-worktree-collapsed', String(worktreeCollapsed));
+  }, [worktreeCollapsed]);
+
+  // Resize handlers
+  const handleResizeStart = useCallback(
+    (panel: 'workspace' | 'worktree') => (e: React.MouseEvent) => {
+      e.preventDefault();
+      setResizing(panel);
+      startXRef.current = e.clientX;
+      startWidthRef.current = panel === 'workspace' ? workspaceWidth : worktreeWidth;
+    },
+    [workspaceWidth, worktreeWidth]
+  );
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - startXRef.current;
+      const newWidth = startWidthRef.current + delta;
+
+      if (resizing === 'workspace') {
+        setWorkspaceWidth(Math.max(WORKSPACE_MIN, Math.min(WORKSPACE_MAX, newWidth)));
+      } else {
+        setWorktreeWidth(Math.max(WORKTREE_MIN, Math.min(WORKTREE_MAX, newWidth)));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing]);
+
+  // Get worktrees for selected repo
+  const { data: worktrees = [], isLoading: worktreesLoading, refetch } = useWorktreeList(
+    selectedRepo
+  );
+
+  // Get branches for selected repo
+  const { data: branches = [], refetch: refetchBranches } = useGitBranches(selectedRepo);
+
+  // Worktree mutations
+  const createWorktreeMutation = useWorktreeCreate();
+  const removeWorktreeMutation = useWorktreeRemove();
+
+  // Initialize default workspace if none exists
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      const defaultWorkspace: WorkspaceRecord = {
+        id: 1,
+        name: 'Personal',
+        path: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setWorkspaces([defaultWorkspace]);
+      setCurrentWorkspace(defaultWorkspace);
+    }
+  }, [workspaces.length, setWorkspaces, setCurrentWorkspace]);
+
+  // Load saved repositories and selection from localStorage
+  useEffect(() => {
+    const savedRepos = localStorage.getItem('enso-repositories');
+    if (savedRepos) {
+      try {
+        const parsed = JSON.parse(savedRepos) as Repository[];
+        setRepositories(parsed);
+      } catch {
+        // ignore
+      }
+    }
+
+    const savedSelectedRepo = localStorage.getItem('enso-selected-repo');
+    if (savedSelectedRepo) {
+      setSelectedRepo(savedSelectedRepo);
+    }
+
+    const savedWorktreePath = localStorage.getItem('enso-active-worktree');
+    if (savedWorktreePath) {
+      // 需要等 worktrees 加载后再设置
+      setActiveWorktree({ path: savedWorktreePath } as GitWorktree);
+    }
+  }, []);
+
+  // Save repositories to localStorage
+  const saveRepositories = useCallback((repos: Repository[]) => {
+    localStorage.setItem('enso-repositories', JSON.stringify(repos));
+    setRepositories(repos);
+  }, []);
+
+  // Save selected repo to localStorage
+  useEffect(() => {
+    if (selectedRepo) {
+      localStorage.setItem('enso-selected-repo', selectedRepo);
+    } else {
+      localStorage.removeItem('enso-selected-repo');
+    }
+  }, [selectedRepo]);
+
+  // Save active worktree to localStorage
+  useEffect(() => {
+    if (activeWorktree) {
+      localStorage.setItem('enso-active-worktree', activeWorktree.path);
+    } else {
+      localStorage.removeItem('enso-active-worktree');
+    }
+  }, [activeWorktree]);
+
+  // Sync activeWorktree with loaded worktrees data
+  useEffect(() => {
+    if (worktrees.length > 0 && activeWorktree) {
+      const found = worktrees.find((wt) => wt.path === activeWorktree.path);
+      if (found && found !== activeWorktree) {
+        setActiveWorktree(found);
+      } else if (!found) {
+        setActiveWorktree(null);
+      }
+    }
+  }, [worktrees, activeWorktree]);
+
+  const handleSelectWorkspace = (workspace: WorkspaceRecord) => {
+    setCurrentWorkspace(workspace);
+    setSelectedRepo(null);
+    setActiveWorktree(null);
+  };
+
+  const handleSelectRepo = (repoPath: string) => {
+    setSelectedRepo(repoPath);
+    setActiveWorktree(null);
+  };
+
+  const handleSelectWorktree = (worktree: GitWorktree) => {
+    setActiveWorktree(worktree);
+  };
+
+  const handleAddRepository = async () => {
+    console.log('handleAddRepository called');
+    try {
+      const selectedPath = await window.electronAPI.dialog.openDirectory();
+      console.log('selectedPath:', selectedPath);
+      if (!selectedPath) return;
+
+      // Check if repo already exists
+      if (repositories.some((r) => r.path === selectedPath)) {
+        return;
+      }
+
+      // Extract repo name from path
+      const name = selectedPath.split('/').pop() || selectedPath;
+
+      const newRepo: Repository = {
+        name,
+        path: selectedPath,
+      };
+
+      const updated = [...repositories, newRepo];
+      saveRepositories(updated);
+
+      // Auto-select the new repo
+      setSelectedRepo(selectedPath);
+    } catch (error) {
+      console.error('Error opening directory dialog:', error);
+    }
+  };
+
+  const handleCreateWorktree = async (options: WorktreeCreateOptions) => {
+    if (!selectedRepo) return;
+    try {
+      await createWorktreeMutation.mutateAsync({
+        workdir: selectedRepo,
+        options,
+      });
+    } finally {
+      // 无论成功失败都刷新分支列表（因为 git worktree add -b 会先创建分支）
+      refetchBranches();
+    }
+  };
+
+  const handleRemoveWorktree = async (worktree: GitWorktree) => {
+    if (!selectedRepo) return;
+    await removeWorktreeMutation.mutateAsync({
+      workdir: selectedRepo,
+      options: {
+        path: worktree.path,
+        force: worktree.prunable, // prunable 的直接 prune，否则 force remove
+      },
+    });
+    // 如果删除的是当前选中的，清空选择
+    if (activeWorktree?.path === worktree.path) {
+      setActiveWorktree(null);
+    }
+    refetchBranches();
+  };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <MainContent activeTab={activeTab} workspace={currentWorkspace} />
+    <div className={`flex h-screen overflow-hidden ${resizing ? 'select-none' : ''}`}>
+      {/* Column 1: Workspace Sidebar */}
+      <WorkspaceSidebar
+        workspaces={workspaces}
+        currentWorkspace={currentWorkspace}
+        repositories={repositories}
+        selectedRepo={selectedRepo}
+        onSelectWorkspace={handleSelectWorkspace}
+        onSelectRepo={handleSelectRepo}
+        onAddRepository={handleAddRepository}
+        width={workspaceWidth}
+        collapsed={workspaceCollapsed}
+        onCollapse={() => setWorkspaceCollapsed(!workspaceCollapsed)}
+      />
+
+      {/* Resize handle for workspace */}
+      {!workspaceCollapsed && (
+        <div
+          className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors shrink-0"
+          onMouseDown={handleResizeStart('workspace')}
+        />
+      )}
+
+      {/* Column 2: Worktree Panel */}
+      <WorktreePanel
+        worktrees={worktrees}
+        activeWorktree={activeWorktree}
+        branches={branches}
+        projectName={selectedRepo?.split('/').pop() || ''}
+        isLoading={worktreesLoading}
+        isCreating={createWorktreeMutation.isPending}
+        onSelectWorktree={handleSelectWorktree}
+        onCreateWorktree={handleCreateWorktree}
+        onRemoveWorktree={handleRemoveWorktree}
+        onRefresh={() => {
+          refetch();
+          refetchBranches();
+        }}
+        width={worktreeWidth}
+        collapsed={worktreeCollapsed}
+        onCollapse={() => setWorktreeCollapsed(!worktreeCollapsed)}
+        workspaceCollapsed={workspaceCollapsed}
+        onExpandWorkspace={() => setWorkspaceCollapsed(false)}
+      />
+
+      {/* Resize handle for worktree */}
+      {!worktreeCollapsed && (
+        <div
+          className="w-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 transition-colors shrink-0"
+          onMouseDown={handleResizeStart('worktree')}
+        />
+      )}
+
+      {/* Column 3: Main Content */}
+      <MainContent
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        workspaceName={currentWorkspace?.name}
+        worktreePath={activeWorktree?.path}
+        workspaceCollapsed={workspaceCollapsed}
+        worktreeCollapsed={worktreeCollapsed}
+        onExpandWorkspace={() => setWorkspaceCollapsed(false)}
+        onExpandWorktree={() => setWorktreeCollapsed(false)}
+      />
     </div>
   );
 }

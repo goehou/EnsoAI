@@ -18,7 +18,7 @@ export function createMainWindow(): BrowserWindow {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.cjs'),
     },
   });
 

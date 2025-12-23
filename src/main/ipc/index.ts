@@ -1,5 +1,6 @@
 import { registerAgentHandlers } from './agent';
 import { registerAppHandlers } from './app';
+import { registerCliHandlers } from './cli';
 import { registerDatabaseHandlers } from './database';
 import { registerDialogHandlers } from './dialog';
 import { registerFileHandlers } from './files';
@@ -16,4 +17,5 @@ export function registerIpcHandlers(): void {
   registerDatabaseHandlers();
   registerDialogHandlers();
   registerAppHandlers();
+  registerCliHandlers();
 }

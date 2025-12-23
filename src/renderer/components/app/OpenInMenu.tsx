@@ -73,7 +73,7 @@ export function OpenInMenu({ path }: OpenInMenuProps) {
     return (
       <div className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm opacity-50">
         <FolderOpen className="h-3.5 w-3.5" />
-        <span>Select Worktree</span>
+        <span>Quick Open</span>
       </div>
     );
   }

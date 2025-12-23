@@ -26,7 +26,6 @@ files:
   - "!node_modules/@tailwindcss/**"
   - "!node_modules/tailwindcss/**"
   - "!node_modules/jiti/**"
-  - "!node_modules/@parcel/**"
   - "!node_modules/@babel/**"
   # Exclude native module build artifacts (source not needed at runtime)
   - "!node_modules/better-sqlite3/deps/**"

@@ -3,6 +3,7 @@ import {
   clearTerminalThemeFromApp,
   isTerminalThemeDark,
 } from '@/lib/ghosttyTheme';
+import type { BuiltinAgentId, CustomAgent } from '@shared/types';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -51,6 +52,15 @@ export type FontWeight =
   | '800'
   | '900';
 
+export interface AgentConfig {
+  enabled: boolean;
+  isDefault: boolean;
+}
+
+export type AgentSettings = Record<string, AgentConfig>;
+
+export const BUILTIN_AGENT_IDS: BuiltinAgentId[] = ['claude', 'codex', 'droid', 'gemini', 'auggie'];
+
 interface SettingsState {
   theme: Theme;
   fontSize: number;
@@ -59,7 +69,9 @@ interface SettingsState {
   terminalFontFamily: string;
   terminalFontWeight: FontWeight;
   terminalFontWeightBold: FontWeight;
-  terminalTheme: string; // Ghostty theme name
+  terminalTheme: string;
+  agentSettings: AgentSettings;
+  customAgents: CustomAgent[];
 
   setTheme: (theme: Theme) => void;
   setFontSize: (size: number) => void;
@@ -69,7 +81,20 @@ interface SettingsState {
   setTerminalFontWeight: (weight: FontWeight) => void;
   setTerminalFontWeightBold: (weight: FontWeight) => void;
   setTerminalTheme: (theme: string) => void;
+  setAgentEnabled: (agentId: string, enabled: boolean) => void;
+  setAgentDefault: (agentId: string) => void;
+  addCustomAgent: (agent: CustomAgent) => void;
+  updateCustomAgent: (id: string, updates: Partial<CustomAgent>) => void;
+  removeCustomAgent: (id: string) => void;
 }
+
+const defaultAgentSettings: AgentSettings = {
+  claude: { enabled: true, isDefault: true },
+  codex: { enabled: true, isDefault: false },
+  droid: { enabled: true, isDefault: false },
+  gemini: { enabled: true, isDefault: false },
+  auggie: { enabled: true, isDefault: false },
+};
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
@@ -78,10 +103,12 @@ export const useSettingsStore = create<SettingsState>()(
       fontSize: 14,
       fontFamily: 'Inter',
       terminalFontSize: 18,
-      terminalFontFamily: 'Maple Mono NF CN, JetBrains Mono, Menlo, Monaco, monospace',
+      terminalFontFamily: 'ui-monospace, SF Mono, Menlo, Monaco, Consolas, monospace',
       terminalFontWeight: 'normal',
       terminalFontWeightBold: '500',
       terminalTheme: 'Dracula',
+      agentSettings: defaultAgentSettings,
+      customAgents: [],
 
       setTheme: (theme) => {
         const terminalTheme = get().terminalTheme;
@@ -111,6 +138,57 @@ export const useSettingsStore = create<SettingsState>()(
           applyTerminalThemeToApp(terminalTheme, true);
         }
         set({ terminalTheme });
+      },
+      setAgentEnabled: (agentId, enabled) => {
+        const current = get().agentSettings;
+        set({
+          agentSettings: {
+            ...current,
+            [agentId]: { ...current[agentId], enabled },
+          },
+        });
+      },
+      setAgentDefault: (agentId) => {
+        const current = get().agentSettings;
+        const updated = { ...current };
+        for (const id of Object.keys(updated)) {
+          updated[id] = { ...updated[id], isDefault: id === agentId };
+        }
+        set({ agentSettings: updated });
+      },
+      addCustomAgent: (agent) => {
+        const { customAgents, agentSettings } = get();
+        set({
+          customAgents: [...customAgents, agent],
+          agentSettings: {
+            ...agentSettings,
+            [agent.id]: { enabled: true, isDefault: false },
+          },
+        });
+      },
+      updateCustomAgent: (id, updates) => {
+        const { customAgents } = get();
+        set({
+          customAgents: customAgents.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+        });
+      },
+      removeCustomAgent: (id) => {
+        const { customAgents, agentSettings } = get();
+        const wasDefault = agentSettings[id]?.isDefault;
+        const newAgentSettings = { ...agentSettings };
+        delete newAgentSettings[id];
+
+        if (wasDefault) {
+          const firstEnabled = Object.entries(newAgentSettings).find(([, cfg]) => cfg.enabled);
+          if (firstEnabled) {
+            newAgentSettings[firstEnabled[0]] = { ...firstEnabled[1], isDefault: true };
+          }
+        }
+
+        set({
+          customAgents: customAgents.filter((a) => a.id !== id),
+          agentSettings: newAgentSettings,
+        });
       },
     }),
     {

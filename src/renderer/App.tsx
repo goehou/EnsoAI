@@ -80,15 +80,15 @@ export default function App() {
           setSettingsOpen(true);
           break;
         case 'close-window':
-          // If settings is open, close it; otherwise let default behavior handle
-          if (settingsOpen) {
-            setSettingsOpen(false);
-          }
+          setSettingsOpen((prev) => {
+            if (prev) return false;
+            return prev;
+          });
           break;
       }
     });
     return cleanup;
-  }, [settingsOpen]);
+  }, []);
 
   // Save panel sizes to localStorage
   useEffect(() => {

@@ -6,9 +6,10 @@ import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
 
-interface ClaudeTerminalProps {
+interface AgentTerminalProps {
   cwd?: string;
   sessionId?: string;
+  agentCommand?: string; // CLI command to run (e.g., 'claude', 'codex', 'gemini')
   initialized?: boolean;
   isActive?: boolean; // true when this terminal should be visible/active
   onInitialized?: () => void;
@@ -38,14 +39,15 @@ function useTerminalSettings() {
   };
 }
 
-export function ClaudeTerminal({
+export function AgentTerminal({
   cwd,
   sessionId,
+  agentCommand = 'claude',
   initialized,
   isActive = false,
   onInitialized,
   onExit,
-}: ClaudeTerminalProps) {
+}: AgentTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const settings = useTerminalSettings();
@@ -61,6 +63,9 @@ export function ClaudeTerminal({
   const hasBeenActivatedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const hasReceivedDataRef = useRef(false);
+  // Track when terminal was started for auto-close logic
+  const startTimeRef = useRef<number | null>(null);
+  const MIN_RUNTIME_FOR_AUTO_CLOSE = 10000; // 10 seconds
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: settings is intentionally excluded - terminal is initialized once with initial settings, then updated dynamically via a separate effect
   const initTerminal = useCallback(async () => {
@@ -91,25 +96,28 @@ export function ClaudeTerminal({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Create pty session running claude command
+    // Create pty session running agent command
     try {
-      // First run: use --session-id to create; Resume: use --resume to restore
-      const claudeArgs = sessionId
-        ? initialized
-          ? ['--resume', sessionId]
-          : ['--session-id', sessionId]
-        : [];
+      // Only Claude supports --session-id/--resume for session persistence
+      const supportsSession = agentCommand === 'claude';
+      const agentArgs =
+        supportsSession && sessionId
+          ? initialized
+            ? ['--resume', sessionId]
+            : ['--session-id', sessionId]
+          : [];
       // Use interactive login shell to get full user environment (node, nvm, etc.)
-      const claudeCommand = `claude ${claudeArgs.join(' ')}`;
+      const command = `${agentCommand} ${agentArgs.join(' ')}`.trim();
       const ptyId = await window.electronAPI.terminal.create({
         cwd: cwd || window.electronAPI.env.HOME,
         shell: '/bin/zsh',
-        args: ['-i', '-l', '-c', claudeCommand],
+        args: ['-i', '-l', '-c', command],
         cols: terminal.cols,
         rows: terminal.rows,
       });
 
       ptyIdRef.current = ptyId;
+      startTimeRef.current = Date.now();
 
       // Mark as initialized after first successful creation
       if (!initialized) {
@@ -132,7 +140,17 @@ export function ClaudeTerminal({
       // Handle exit from pty
       const exitCleanup = window.electronAPI.terminal.onExit((event) => {
         if (event.id === ptyId) {
-          onExitRef.current?.();
+          const runtime = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+          if (runtime >= MIN_RUNTIME_FOR_AUTO_CLOSE) {
+            // Normal exit after running for a while - auto close
+            onExitRef.current?.();
+          } else {
+            // Quick exit - likely an error, keep tab open for debugging
+            terminal.writeln('');
+            terminal.writeln(
+              '\x1b[33m[Process exited quickly - tab kept open for debugging]\x1b[0m'
+            );
+          }
         }
       });
       exitCleanupRef.current = exitCleanup;
@@ -146,10 +164,9 @@ export function ClaudeTerminal({
     } catch (error) {
       setIsLoading(false);
       terminal.writeln(
-        '\x1b[31mFailed to start claude. Make sure claude is installed and in PATH.\x1b[0m'
+        `\x1b[31mFailed to start ${agentCommand}. Make sure it is installed and in PATH.\x1b[0m`
       );
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
-      terminal.writeln('\x1b[90mInstall claude: npm install -g @anthropic-ai/claude-code\x1b[0m');
     }
   }, [cwd]);
 
@@ -254,7 +271,7 @@ export function ClaudeTerminal({
               style={{ color: settings.theme.foreground, opacity: 0.5 }}
             />
             <span style={{ color: settings.theme.foreground, opacity: 0.5 }} className="text-sm">
-              Loading Claude...
+              Loading {agentCommand}...
             </span>
           </div>
         </div>

@@ -57,6 +57,10 @@ export const IPC_CHANNELS = {
   APP_DETECT: 'app:detect',
   APP_OPEN_WITH: 'app:openWith',
   APP_GET_ICON: 'app:getIcon',
+
+  // CLI Detector
+  CLI_DETECT: 'cli:detect',
+  CLI_DETECT_ONE: 'cli:detectOne',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

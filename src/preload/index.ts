@@ -1,6 +1,9 @@
 import { IPC_CHANNELS } from '@shared/types';
 import type {
+  AgentCliInfo,
+  AgentCliStatus,
   AgentMetadata,
+  CustomAgent,
   DatabaseQueryResult,
   DetectedApp,
   GitBranch,
@@ -158,6 +161,14 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.APP_OPEN_WITH, path, bundleId),
     getIcon: (bundleId: string): Promise<string | undefined> =>
       ipcRenderer.invoke(IPC_CHANNELS.APP_GET_ICON, bundleId),
+  },
+
+  // CLI Detector
+  cli: {
+    detect: (customAgents?: CustomAgent[]): Promise<AgentCliStatus> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLI_DETECT, customAgents),
+    detectOne: (agentId: string, customAgent?: CustomAgent): Promise<AgentCliInfo> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CLI_DETECT_ONE, agentId, customAgent),
   },
 
   // Environment

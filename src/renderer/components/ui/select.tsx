@@ -56,7 +56,6 @@ function SelectPopup({
 }) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Backdrop className="fixed inset-0 z-40" />
       <SelectPrimitive.Positioner
         alignItemWithTrigger={alignItemWithTrigger}
         className="z-50 select-none"

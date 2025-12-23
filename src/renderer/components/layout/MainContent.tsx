@@ -22,7 +22,7 @@ const tabs: Array<{ id: TabId; icon: React.ElementType; label: string }> = [
   { id: 'chat', icon: Sparkles, label: 'Agent' },
   { id: 'file', icon: FileCode, label: 'File' },
   { id: 'terminal', icon: Terminal, label: 'Terminal' },
-  { id: 'source-control', icon: GitBranch, label: 'Source Control' },
+  { id: 'source-control', icon: GitBranch, label: 'VSC' },
 ];
 
 export function MainContent({

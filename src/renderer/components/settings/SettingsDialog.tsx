@@ -6,14 +6,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from '@/components/ui/combobox';
-import {
-  Dialog,
-  DialogDescription,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogPopup, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -22,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   type XtermTheme,
   defaultDarkTheme,
@@ -30,22 +24,29 @@ import {
 } from '@/lib/ghosttyTheme';
 import { cn } from '@/lib/utils';
 import { type FontWeight, type Theme, useSettingsStore } from '@/stores/settings';
+import type { AgentCliInfo, BuiltinAgentId, CustomAgent } from '@shared/types';
 import {
+  Bot,
   ChevronLeft,
   ChevronRight,
   Monitor,
   Moon,
   Palette,
+  Pencil,
+  Plus,
+  RefreshCw,
   Settings,
   Sun,
   Terminal,
+  Trash2,
 } from 'lucide-react';
 import * as React from 'react';
 
-type SettingsCategory = 'appearance';
+type SettingsCategory = 'appearance' | 'agent';
 
 const categories: Array<{ id: SettingsCategory; icon: React.ElementType; label: string }> = [
   { id: 'appearance', icon: Palette, label: '外观' },
+  { id: 'agent', icon: Bot, label: 'Agent' },
 ];
 
 interface SettingsDialogProps {
@@ -74,12 +75,10 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
         />
       )}
       <DialogPopup className="sm:max-w-2xl" showCloseButton={true}>
-        <DialogHeader>
-          <DialogTitle>设置</DialogTitle>
-          <DialogDescription>自定义你的应用体验</DialogDescription>
-        </DialogHeader>
-
-        <div className="flex min-h-[400px] border-t">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <DialogTitle className="text-lg font-medium">设置</DialogTitle>
+        </div>
+        <div className="flex min-h-[400px]">
           {/* Left: Category List */}
           <nav className="w-48 shrink-0 space-y-1 border-r p-2">
             {categories.map((category) => (
@@ -103,6 +102,7 @@ export function SettingsDialog({ trigger, open, onOpenChange }: SettingsDialogPr
           {/* Right: Settings Panel */}
           <div className="flex-1 overflow-y-auto p-6">
             {activeCategory === 'appearance' && <AppearanceSettings />}
+            {activeCategory === 'agent' && <AgentSettings />}
           </div>
         </div>
       </DialogPopup>
@@ -443,5 +443,407 @@ function ThemeCombobox({
         </ComboboxList>
       </ComboboxPopup>
     </Combobox>
+  );
+}
+
+const BUILTIN_AGENT_INFO: Record<BuiltinAgentId, { name: string; description: string }> = {
+  claude: { name: 'Claude', description: 'Anthropic Claude Code CLI' },
+  codex: { name: 'Codex', description: 'OpenAI Codex CLI' },
+  droid: { name: 'Droid', description: 'Droid AI CLI' },
+  gemini: { name: 'Gemini', description: 'Google Gemini CLI' },
+  auggie: { name: 'Auggie', description: 'Augment Code CLI' },
+};
+
+const BUILTIN_AGENTS: BuiltinAgentId[] = ['claude', 'codex', 'droid', 'gemini', 'auggie'];
+
+function AgentSettings() {
+  const {
+    agentSettings,
+    customAgents,
+    setAgentEnabled,
+    setAgentDefault,
+    addCustomAgent,
+    updateCustomAgent,
+    removeCustomAgent,
+  } = useSettingsStore();
+  const [cliStatus, setCliStatus] = React.useState<Record<string, AgentCliInfo>>({});
+  const [loadingAgents, setLoadingAgents] = React.useState<Set<string>>(new Set());
+  const [editingAgent, setEditingAgent] = React.useState<CustomAgent | null>(null);
+  const [isAddingAgent, setIsAddingAgent] = React.useState(false);
+
+  const detectAllAgents = React.useCallback(() => {
+    const allAgentIds = [...BUILTIN_AGENTS, ...customAgents.map((a) => a.id)];
+    setLoadingAgents(new Set(allAgentIds));
+
+    // Detect each agent individually
+    for (const agentId of BUILTIN_AGENTS) {
+      window.electronAPI.cli.detectOne(agentId).then((result) => {
+        setCliStatus((prev) => ({ ...prev, [agentId]: result }));
+        setLoadingAgents((prev) => {
+          const next = new Set(prev);
+          next.delete(agentId);
+          return next;
+        });
+      });
+    }
+
+    for (const agent of customAgents) {
+      window.electronAPI.cli.detectOne(agent.id, agent).then((result) => {
+        setCliStatus((prev) => ({ ...prev, [agent.id]: result }));
+        setLoadingAgents((prev) => {
+          const next = new Set(prev);
+          next.delete(agent.id);
+          return next;
+        });
+      });
+    }
+  }, [customAgents]);
+
+  React.useEffect(() => {
+    detectAllAgents();
+  }, [detectAllAgents]);
+
+  const handleEnabledChange = (agentId: string, enabled: boolean) => {
+    setAgentEnabled(agentId, enabled);
+    if (!enabled && agentSettings[agentId]?.isDefault) {
+      const allAgentIds = [...BUILTIN_AGENTS, ...customAgents.map((a) => a.id)];
+      const firstEnabled = allAgentIds.find(
+        (id) => id !== agentId && agentSettings[id]?.enabled && cliStatus?.[id]?.installed
+      );
+      if (firstEnabled) {
+        setAgentDefault(firstEnabled);
+      }
+    }
+  };
+
+  const handleDefaultChange = (agentId: string) => {
+    if (agentSettings[agentId]?.enabled && cliStatus?.[agentId]?.installed) {
+      setAgentDefault(agentId);
+    }
+  };
+
+  const handleAddAgent = (agent: Omit<CustomAgent, 'id'>) => {
+    const id = `custom-${Date.now()}`;
+    addCustomAgent({ ...agent, id });
+    setIsAddingAgent(false);
+  };
+
+  const handleEditAgent = (agent: CustomAgent) => {
+    updateCustomAgent(agent.id, agent);
+    setEditingAgent(null);
+  };
+
+  const handleRemoveAgent = (id: string) => {
+    removeCustomAgent(id);
+  };
+
+  const isRefreshing = loadingAgents.size > 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium">Agent</h3>
+          <p className="text-sm text-muted-foreground">配置可用的 AI Agent CLI 工具</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={detectAllAgents}
+          disabled={isRefreshing}
+        >
+          <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
+        </Button>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        新建会话使用默认 Agent，长按加号可选择其他已启用的 Agent。目前仅 Claude 支持会话持久化。
+      </p>
+
+      {/* Builtin Agents */}
+      <div className="space-y-3">
+        {BUILTIN_AGENTS.map((agentId) => {
+          const info = BUILTIN_AGENT_INFO[agentId];
+          const cli = cliStatus[agentId];
+          const isLoading = loadingAgents.has(agentId);
+          const isInstalled = cli?.installed ?? false;
+          const config = agentSettings[agentId];
+          const canEnable = isInstalled;
+          const canSetDefault = isInstalled && config?.enabled;
+
+          return (
+            <div
+              key={agentId}
+              className={cn(
+                'flex items-center justify-between rounded-lg border p-4',
+                !isLoading && !isInstalled && 'opacity-50'
+              )}
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{info.name}</span>
+                  {!isLoading && cli?.version && (
+                    <span className="text-xs text-muted-foreground">v{cli.version}</span>
+                  )}
+                  {!isLoading && !isInstalled && (
+                    <span className="whitespace-nowrap rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
+                      未安装
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">{info.description}</p>
+              </div>
+
+              <div className="flex items-center gap-6">
+                {isLoading ? (
+                  <div className="flex h-5 w-24 items-center justify-center">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">启用</span>
+                      <Switch
+                        checked={config?.enabled && canEnable}
+                        onCheckedChange={(checked) => handleEnabledChange(agentId, checked)}
+                        disabled={!canEnable}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">默认</span>
+                      <Switch
+                        checked={config?.isDefault ?? false}
+                        onCheckedChange={() => handleDefaultChange(agentId)}
+                        disabled={!canSetDefault}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Custom Agents Section */}
+      <div className="border-t pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-medium">自定义 Agent</h3>
+            <p className="text-sm text-muted-foreground">添加自定义 CLI 工具</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setIsAddingAgent(true)}>
+            <Plus className="mr-1 h-4 w-4" />
+            添加
+          </Button>
+        </div>
+
+        {customAgents.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {customAgents.map((agent) => {
+              const cli = cliStatus[agent.id];
+              const isLoading = loadingAgents.has(agent.id);
+              const isInstalled = cli?.installed ?? false;
+              const config = agentSettings[agent.id];
+              const canEnable = isInstalled;
+              const canSetDefault = isInstalled && config?.enabled;
+
+              return (
+                <div
+                  key={agent.id}
+                  className={cn(
+                    'rounded-lg border p-4',
+                    !isLoading && !isInstalled && 'opacity-50'
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{agent.name}</span>
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                        {agent.command}
+                      </code>
+                      {!isLoading && cli?.version && (
+                        <span className="text-xs text-muted-foreground">v{cli.version}</span>
+                      )}
+                      {!isLoading && !isInstalled && (
+                        <span className="whitespace-nowrap rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
+                          未安装
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setEditingAgent(agent)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveAgent(agent.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  {agent.description && (
+                    <p className="mt-1 text-sm text-muted-foreground">{agent.description}</p>
+                  )}
+                  <div className="mt-3 flex items-center gap-6">
+                    {isLoading ? (
+                      <div className="flex h-5 w-24 items-center">
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">启用</span>
+                          <Switch
+                            checked={config?.enabled && canEnable}
+                            onCheckedChange={(checked) => handleEnabledChange(agent.id, checked)}
+                            disabled={!canEnable}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">默认</span>
+                          <Switch
+                            checked={config?.isDefault ?? false}
+                            onCheckedChange={() => handleDefaultChange(agent.id)}
+                            disabled={!canSetDefault}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {customAgents.length === 0 && !isAddingAgent && (
+          <div className="mt-4 rounded-lg border border-dashed p-6 text-center">
+            <p className="text-sm text-muted-foreground">暂无自定义 Agent</p>
+          </div>
+        )}
+      </div>
+
+      {/* Add Agent Dialog */}
+      <Dialog open={isAddingAgent} onOpenChange={setIsAddingAgent}>
+        <DialogPopup className="sm:max-w-sm" showCloseButton={false}>
+          <div className="p-4">
+            <DialogTitle className="text-base font-medium">添加自定义 Agent</DialogTitle>
+            <AgentForm
+              onSubmit={handleAddAgent}
+              onCancel={() => setIsAddingAgent(false)}
+            />
+          </div>
+        </DialogPopup>
+      </Dialog>
+
+      {/* Edit Agent Dialog */}
+      <Dialog open={!!editingAgent} onOpenChange={(open) => !open && setEditingAgent(null)}>
+        <DialogPopup className="sm:max-w-sm" showCloseButton={false}>
+          <div className="p-4">
+            <DialogTitle className="text-base font-medium">编辑 Agent</DialogTitle>
+            {editingAgent && (
+              <AgentForm
+                agent={editingAgent}
+                onSubmit={handleEditAgent}
+                onCancel={() => setEditingAgent(null)}
+              />
+            )}
+          </div>
+        </DialogPopup>
+      </Dialog>
+    </div>
+  );
+}
+
+type AgentFormProps =
+  | {
+      agent: CustomAgent;
+      onSubmit: (agent: CustomAgent) => void;
+      onCancel: () => void;
+    }
+  | {
+      agent?: undefined;
+      onSubmit: (agent: Omit<CustomAgent, 'id'>) => void;
+      onCancel: () => void;
+    };
+
+function AgentForm({ agent, onSubmit, onCancel }: AgentFormProps) {
+  const [name, setName] = React.useState(agent?.name ?? '');
+  const [command, setCommand] = React.useState(agent?.command ?? '');
+  const [description, setDescription] = React.useState(agent?.description ?? '');
+
+  const isValid = name.trim() && command.trim();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValid) return;
+
+    const data = {
+      name: name.trim(),
+      command: command.trim(),
+      description: description.trim() || undefined,
+    };
+
+    if (agent) {
+      (onSubmit as (agent: CustomAgent) => void)({ ...agent, ...data });
+    } else {
+      (onSubmit as (agent: Omit<CustomAgent, 'id'>) => void)(data);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+      <div className="space-y-1">
+        <label htmlFor="agent-name" className="text-sm font-medium">
+          名称
+        </label>
+        <Input
+          id="agent-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="My Agent"
+        />
+      </div>
+      <div className="space-y-1">
+        <label htmlFor="agent-command" className="text-sm font-medium">
+          命令
+        </label>
+        <Input
+          id="agent-command"
+          value={command}
+          onChange={(e) => setCommand(e.target.value)}
+          placeholder="my-agent --arg1"
+        />
+      </div>
+      <div className="space-y-1">
+        <label htmlFor="agent-desc" className="text-sm font-medium">
+          描述 <span className="font-normal text-muted-foreground">(可选)</span>
+        </label>
+        <Input
+          id="agent-desc"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="简短描述"
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+          取消
+        </Button>
+        <Button type="submit" size="sm" disabled={!isValid}>
+          {agent ? '保存' : '添加'}
+        </Button>
+      </div>
+    </form>
   );
 }

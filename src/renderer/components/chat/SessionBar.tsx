@@ -1,13 +1,17 @@
 import { cn } from '@/lib/utils';
+import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { GripVertical, Plus, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'enso-session-bar';
 const EDGE_THRESHOLD = 20; // pixels from edge
+const LONG_PRESS_DELAY = 500; // ms for long press detection
 
 export interface Session {
-  id: string; // UUID, also used for claude --session-id
+  id: string; // UUID, also used for agent --session-id
   name: string;
+  agentId: string; // which agent CLI to use (e.g., 'claude', 'codex', 'gemini')
+  agentCommand: string; // the CLI command to run (e.g., 'claude', 'codex')
   initialized: boolean; // true after first run, use --resume to restore
   cwd: string; // worktree path this session belongs to
 }
@@ -18,6 +22,7 @@ interface SessionBarProps {
   onSelectSession: (id: string) => void;
   onCloseSession: (id: string) => void;
   onNewSession: () => void;
+  onNewSessionWithAgent?: (agentId: string, agentCommand: string) => void;
   onRenameSession: (id: string, name: string) => void;
 }
 
@@ -36,12 +41,22 @@ function loadState(): BarState {
   return { x: 50, y: 16, collapsed: false, edge: null };
 }
 
+// Agent display names and commands
+const AGENT_INFO: Record<string, { name: string; command: string }> = {
+  claude: { name: 'Claude', command: 'claude' },
+  codex: { name: 'Codex', command: 'codex' },
+  droid: { name: 'Droid', command: 'droid' },
+  gemini: { name: 'Gemini', command: 'gemini' },
+  auggie: { name: 'Auggie', command: 'auggie' },
+};
+
 export function SessionBar({
   sessions,
   activeSessionId,
   onSelectSession,
   onCloseSession,
   onNewSession,
+  onNewSessionWithAgent,
   onRenameSession,
 }: SessionBarProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,7 +66,15 @@ export function SessionBar({
   const [dragging, setDragging] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [showAgentMenu, setShowAgentMenu] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
+
+  // Get enabled agents from settings
+  const { agentSettings, customAgents } = useSettingsStore();
+  const enabledAgents = [...BUILTIN_AGENT_IDS, ...customAgents.map((a) => a.id)].filter(
+    (id) => agentSettings[id]?.enabled
+  );
 
   // Save state
   useEffect(() => {
@@ -150,6 +173,58 @@ export function SessionBar({
     [handleFinishEdit]
   );
 
+  // Long press handlers for new session with agent selection
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleAddMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      clearLongPressTimer();
+      longPressTimerRef.current = setTimeout(() => {
+        setShowAgentMenu(true);
+      }, LONG_PRESS_DELAY);
+    },
+    [clearLongPressTimer]
+  );
+
+  const handleAddMouseUp = useCallback(() => {
+    clearLongPressTimer();
+  }, [clearLongPressTimer]);
+
+  const handleAddMouseLeave = useCallback(() => {
+    clearLongPressTimer();
+  }, [clearLongPressTimer]);
+
+  const handleAddClick = useCallback(() => {
+    // Only trigger if not showing menu (menu shown on long press)
+    if (!showAgentMenu) {
+      onNewSession();
+    }
+  }, [showAgentMenu, onNewSession]);
+
+  const handleSelectAgent = useCallback(
+    (agentId: string) => {
+      const customAgent = customAgents.find((a) => a.id === agentId);
+      const info = customAgent
+        ? { name: customAgent.name, command: customAgent.command }
+        : AGENT_INFO[agentId] || { name: 'Claude', command: 'claude' };
+
+      onNewSessionWithAgent?.(agentId, info.command);
+      setShowAgentMenu(false);
+    },
+    [customAgents, onNewSessionWithAgent]
+  );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => clearLongPressTimer();
+  }, [clearLongPressTimer]);
+
   return (
     <div ref={containerRef} className="absolute inset-0 pointer-events-none z-10">
       <div
@@ -239,13 +314,50 @@ export function SessionBar({
 
             <div className="mx-1 h-4 w-px bg-border" />
 
-            <button
-              type="button"
-              onClick={onNewSession}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleAddClick}
+                onMouseDown={handleAddMouseDown}
+                onMouseUp={handleAddMouseUp}
+                onMouseLeave={handleAddMouseLeave}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+
+              {/* Agent selection menu for new session */}
+              {showAgentMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowAgentMenu(false)}
+                    onKeyDown={(e) => e.key === 'Escape' && setShowAgentMenu(false)}
+                  />
+                  <div className="absolute top-full right-0 mt-1 z-50 min-w-32 rounded-lg border bg-popover p-1 shadow-lg">
+                    <div className="px-2 py-1 text-xs text-muted-foreground">选择 Agent</div>
+                    {enabledAgents.map((agentId) => {
+                      const customAgent = customAgents.find((a) => a.id === agentId);
+                      const name = customAgent?.name ?? AGENT_INFO[agentId]?.name ?? agentId;
+                      const isDefault = agentSettings[agentId]?.isDefault;
+                      return (
+                        <button
+                          type="button"
+                          key={agentId}
+                          onClick={() => handleSelectAgent(agentId)}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <span>{name}</span>
+                          {isDefault && (
+                            <span className="text-xs text-muted-foreground">(默认)</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

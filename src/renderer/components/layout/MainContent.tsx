@@ -161,7 +161,7 @@ export function MainContent({
         </div>
         {/* File tab - use hidden instead of invisible for Monaco */}
         <div className={cn('absolute inset-0', activeTab !== 'file' && 'hidden')}>
-          <FilePanel rootPath={worktreePath} />
+          <FilePanel rootPath={worktreePath} isActive={activeTab === 'file'} />
         </div>
         {/* Source Control tab - use hidden instead of invisible for Monaco */}
         <div className={cn('absolute inset-0', activeTab !== 'source-control' && 'hidden')}>

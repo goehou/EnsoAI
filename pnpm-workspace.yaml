@@ -1,16 +1,5 @@
 onlyBuiltDependencies:
-  - '-'
-  - '@biomejs/biome'
   - '@parcel/watcher'
-  - better-sqlite3
-  - d
-  - e
   - electron
-  - electron-winstaller
   - esbuild
-  - n
   - node-pty
-  - o
-  - p
-  - t
-  - y

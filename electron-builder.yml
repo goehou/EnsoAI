@@ -28,8 +28,6 @@ files:
   - "!node_modules/jiti/**"
   - "!node_modules/@babel/**"
   # Exclude native module build artifacts (source not needed at runtime)
-  - "!node_modules/better-sqlite3/deps/**"
-  - "!node_modules/better-sqlite3/src/**"
   - "!node_modules/node-pty/src/**"
   - "!node_modules/node-pty/deps/**"
   # Exclude lucide-react source maps and types
@@ -64,9 +62,9 @@ dmg:
 win:
   target:
     - target: nsis
-      arch: [x64]
+      arch: [x64, ia32]
     - target: portable
-      arch: [x64]
+      arch: [x64, ia32]
   icon: build/icon.ico
 
 nsis:

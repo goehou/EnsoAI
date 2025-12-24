@@ -3,7 +3,6 @@ import type {
   AgentCliStatus,
   AgentMetadata,
   CustomAgent,
-  DatabaseQueryResult,
   DetectedApp,
   FileChangeEvent,
   FileEntry,
@@ -125,14 +124,6 @@ const electronAPI = {
     },
   },
 
-  // Database
-  db: {
-    query: <T = unknown>(sql: string, params?: unknown[]): Promise<DatabaseQueryResult<T>> =>
-      ipcRenderer.invoke(IPC_CHANNELS.DB_QUERY, sql, params),
-    execute: (sql: string, params?: unknown[]): Promise<DatabaseQueryResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.DB_EXECUTE, sql, params),
-  },
-
   // App
   app: {
     getPath: (name: string): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.APP_GET_PATH, name),
@@ -191,6 +182,7 @@ const electronAPI = {
   // Environment
   env: {
     HOME: process.env.HOME || process.env.USERPROFILE || '',
+    platform: process.platform as 'darwin' | 'win32' | 'linux',
   },
 
   // Shell

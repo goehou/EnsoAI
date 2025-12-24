@@ -20,7 +20,7 @@ async function init(): Promise<void> {
 
 app.whenReady().then(async () => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.aizen.app');
+  electronApp.setAppUserModelId('com.ensoai.app');
 
   // Default open or close DevTools by F12 in development
   app.on('browser-window-created', (_, window) => {

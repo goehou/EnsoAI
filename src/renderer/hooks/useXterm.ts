@@ -17,6 +17,25 @@ import '@xterm/xterm/css/xterm.css';
 const FILE_PATH_REGEX =
   /(?:^|[\s'"({[])((?:\.{1,2}\/|\/)?(?:[\w.-]+\/)*[\w.-]+\.(?:tsx|ts|jsx|js|mjs|cjs|json|scss|css|less|html|vue|svelte|md|yaml|yml|toml|py|go|rs|java|cpp|hpp|c|h|rb|php|bash|zsh|sh))(?::(\d+))?(?::(\d+))?/g;
 
+// Check if data contains visible characters (not just ANSI control sequences)
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences require ESC character
+const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
+
+function hasVisibleContent(data: string): boolean {
+  // Remove all ANSI escape sequences
+  const stripped = data.replace(ANSI_ESCAPE_REGEX, '');
+  // Check if there are any non-whitespace visible characters
+  return stripped.trim().length > 0;
+}
+
+function getDefaultCommand(): { shell: string; args: string[] } {
+  const isWindows = window.electronAPI?.env?.platform === 'win32';
+  if (isWindows) {
+    return { shell: 'powershell.exe', args: ['-NoLogo'] };
+  }
+  return { shell: '/bin/zsh', args: ['-i', '-l'] };
+}
+
 export interface UseXtermOptions {
   cwd?: string;
   /** Shell command and args to run */
@@ -84,7 +103,7 @@ function useTerminalSettings() {
 
 export function useXterm({
   cwd,
-  command = { shell: '/bin/zsh', args: ['-i', '-l'] },
+  command = getDefaultCommand(),
   isActive = true,
   onExit,
   onData,
@@ -294,11 +313,6 @@ export function useXterm({
       // 30ms delay merges fragmented TUI packets (clear + write)
       const cleanup = window.electronAPI.terminal.onData((event) => {
         if (event.id === ptyId) {
-          if (!hasReceivedDataRef.current) {
-            hasReceivedDataRef.current = true;
-            setIsLoading(false);
-          }
-
           // Buffer data
           writeBufferRef.current += event.data;
 
@@ -308,6 +322,11 @@ export function useXterm({
               if (writeBufferRef.current.length > 0) {
                 const bufferedData = writeBufferRef.current;
                 terminal.write(bufferedData);
+                // Hide loading only after receiving visible content (not just control sequences)
+                if (!hasReceivedDataRef.current && hasVisibleContent(bufferedData)) {
+                  hasReceivedDataRef.current = true;
+                  setIsLoading(false);
+                }
                 // Call onData after write to avoid React re-render storm
                 onDataRef.current?.(bufferedData);
                 writeBufferRef.current = '';

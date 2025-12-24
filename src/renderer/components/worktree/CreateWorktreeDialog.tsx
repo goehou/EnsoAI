@@ -45,9 +45,11 @@ export function CreateWorktreeDialog({
 
   // 固定路径: ~/ensoai/workspaces/{projectName}/{branchName}
   const home = window.electronAPI?.env?.HOME || '';
+  const isWindows = window.electronAPI?.env?.platform === 'win32';
+  const pathSep = isWindows ? '\\' : '/';
   const getWorktreePath = (branchName: string) => {
     if (!home) return '';
-    return `${home}/ensoai/workspaces/${projectName}/${branchName}`;
+    return [home, 'ensoai', 'workspaces', projectName, branchName].join(pathSep);
   };
 
   const localBranches = branches.filter((b) => !b.name.startsWith('remotes/'));

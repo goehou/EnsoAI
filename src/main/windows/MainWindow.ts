@@ -33,9 +33,13 @@ function loadWindowState(): WindowState {
 
 function saveWindowState(win: BrowserWindow): void {
   try {
+    const bounds = win.getBounds();
     const state: WindowState = {
+      width: bounds.width,
+      height: bounds.height,
+      x: bounds.x,
+      y: bounds.y,
       isMaximized: win.isMaximized(),
-      ...(!win.isMaximized() && win.getBounds()),
     };
     writeFileSync(getStatePath(), JSON.stringify(state));
   } catch {}

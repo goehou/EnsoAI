@@ -1,8 +1,11 @@
 import { exec } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { AgentCliInfo, AgentCliStatus, BuiltinAgentId, CustomAgent } from '@shared/types';
+
+const isWindows = process.platform === 'win32';
 
 const execAsync = promisify(exec);
 
@@ -63,16 +66,30 @@ class CliDetector {
   private cachedStatus: AgentCliStatus | null = null;
 
   private getEnhancedPath(): string {
-    const home = process.env.HOME || '';
+    const home = process.env.HOME || process.env.USERPROFILE || homedir();
+    const currentPath = process.env.PATH || '';
+
+    if (isWindows) {
+      // Windows: Add common Node.js paths
+      const paths = [
+        currentPath,
+        join(home, 'AppData', 'Roaming', 'npm'),
+        join(home, '.volta', 'bin'),
+        join(home, 'scoop', 'shims'),
+      ];
+      return paths.filter(Boolean).join(delimiter);
+    }
+
+    // Unix: Add common paths
     const paths = [
-      process.env.PATH || '',
+      currentPath,
       '/usr/local/bin',
       '/opt/homebrew/bin',
-      `${home}/.local/bin`,
-      `${home}/.volta/bin`,
+      join(home, '.local', 'bin'),
+      join(home, '.volta', 'bin'),
       ...this.getNvmNodeBins(home),
     ];
-    return paths.join(':');
+    return paths.filter(Boolean).join(delimiter);
   }
 
   private getNvmNodeBins(home: string): string[] {

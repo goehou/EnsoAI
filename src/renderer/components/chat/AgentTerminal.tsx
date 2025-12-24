@@ -41,6 +41,14 @@ export function AgentTerminal({
         : [];
     const fullCommand = `${agentCommand} ${agentArgs.join(' ')}`.trim();
 
+    const isWindows = window.electronAPI?.env?.platform === 'win32';
+    if (isWindows) {
+      return {
+        shell: 'powershell.exe',
+        args: ['-NoLogo', '-Command', fullCommand],
+      };
+    }
+
     return {
       shell: '/bin/zsh',
       args: ['-i', '-l', '-c', fullCommand],

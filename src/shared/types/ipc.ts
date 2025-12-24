@@ -44,10 +44,6 @@ export const IPC_CHANNELS = {
   AGENT_SEND: 'agent:send',
   AGENT_MESSAGE: 'agent:message',
 
-  // Database
-  DB_QUERY: 'db:query',
-  DB_EXECUTE: 'db:execute',
-
   // App
   APP_GET_PATH: 'app:getPath',
   APP_UPDATE_AVAILABLE: 'app:updateAvailable',

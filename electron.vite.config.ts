@@ -13,7 +13,7 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['better-sqlite3', 'node-pty', '@parcel/watcher'],
+        external: ['node-pty', '@parcel/watcher'],
       },
     },
   },

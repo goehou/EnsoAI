@@ -1,6 +1,10 @@
+import { homedir } from 'node:os';
+import { delimiter, join } from 'node:path';
 import type { TerminalCreateOptions } from '@shared/types';
 import * as pty from 'node-pty';
 import { detectShell } from './ShellDetector';
+
+const isWindows = process.platform === 'win32';
 
 interface PtySession {
   pty: pty.IPty;
@@ -8,19 +12,33 @@ interface PtySession {
   onExit?: (exitCode: number, signal?: number) => void;
 }
 
-// macOS GUI apps don't inherit shell PATH, add common paths
+// GUI apps don't inherit shell PATH, add common paths
 function getEnhancedPath(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || homedir();
   const currentPath = process.env.PATH || '';
+
+  if (isWindows) {
+    // Windows: Add common Node.js paths
+    const additionalPaths = [
+      join(home, 'AppData', 'Roaming', 'npm'),
+      join(home, '.volta', 'bin'),
+      join(home, 'scoop', 'shims'),
+    ];
+    const allPaths = [...new Set([...additionalPaths, ...currentPath.split(delimiter)])];
+    return allPaths.join(delimiter);
+  }
+
+  // Unix: Add common paths
   const additionalPaths = [
     '/usr/local/bin',
     '/opt/homebrew/bin',
     '/opt/homebrew/sbin',
-    `${process.env.HOME}/.nvm/versions/node/current/bin`,
-    `${process.env.HOME}/.npm-global/bin`,
-    `${process.env.HOME}/.local/bin`,
+    join(home, '.nvm', 'versions', 'node', 'current', 'bin'),
+    join(home, '.npm-global', 'bin'),
+    join(home, '.local', 'bin'),
   ];
-  const allPaths = [...new Set([...additionalPaths, ...currentPath.split(':')])];
-  return allPaths.join(':');
+  const allPaths = [...new Set([...additionalPaths, ...currentPath.split(delimiter)])];
+  return allPaths.join(delimiter);
 }
 
 export class PtyManager {
@@ -34,7 +52,8 @@ export class PtyManager {
   ): string {
     const id = `pty-${++this.counter}`;
     const shell = options.shell || detectShell();
-    const cwd = options.cwd || process.env.HOME || '/';
+    const home = process.env.HOME || process.env.USERPROFILE || homedir();
+    const cwd = options.cwd || home;
 
     const args = options.args || [];
 

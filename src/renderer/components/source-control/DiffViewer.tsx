@@ -142,45 +142,13 @@ export function DiffViewer({
   // Define theme
   defineMonacoDiffTheme(terminalTheme);
 
-  // Function to safely dispose models and editor
-  const cleanupEditor = useCallback(() => {
-    // First, clear the model reference to prevent DiffEditor from accessing disposed models
-    if (editorRef.current) {
-      try {
-        editorRef.current.setModel(null);
-      } catch {
-        // Ignore errors during cleanup
-      }
-    }
-
-    // Then dispose the tracked models
-    if (modelsRef.current.original) {
-      try {
-        modelsRef.current.original.dispose();
-      } catch {
-        // Ignore errors during cleanup
-      }
-      modelsRef.current.original = null;
-    }
-    if (modelsRef.current.modified) {
-      try {
-        modelsRef.current.modified.dispose();
-      } catch {
-        // Ignore errors during cleanup
-      }
-      modelsRef.current.modified = null;
-    }
-
-    // Clear decorations ref
+  // Reset internal state (don't dispose models - let @monaco-editor/react handle that)
+  const resetEditorState = useCallback(() => {
+    editorRef.current = null;
+    modelsRef.current.original = null;
+    modelsRef.current.modified = null;
     decorationsRef.current = [];
   }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupEditor();
-    };
-  }, [cleanupEditor]);
 
   // Highlight current diff range
   const highlightCurrentDiff = useCallback(
@@ -371,14 +339,13 @@ export function DiffViewer({
   // Reset state when file changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally trigger on file change
   useEffect(() => {
-    // Clean up previous editor state before switching to new file
-    cleanupEditor();
+    // Reset state for new file (don't dispose models - key change will unmount/remount)
     setCurrentDiffIndex(-1);
     setLineChanges([]);
     setBoundaryHint(null);
-    decorationsRef.current = [];
     hasAutoNavigatedRef.current = false;
-  }, [file?.path, file?.staged, cleanupEditor]);
+    resetEditorState();
+  }, [file?.path, file?.staged, resetEditorState]);
 
   if (!file) {
     return (

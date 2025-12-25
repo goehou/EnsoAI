@@ -47,19 +47,19 @@ export function AgentTerminal({
 
     // WSL environment: run through WSL with interactive login shell
     if (environment === 'wsl' && isWindows) {
-      // Use $SHELL -ilc to load nvm/rbenv and respect user's default shell
-      const wslCommand = `exec $SHELL -ilc "${fullCommand}"`;
+      // Use $SHELL -ilc to load nvm/rbenv, add explicit exit to ensure shell exits
+      const wslCommand = `exec $SHELL -ilc "${fullCommand}; exit \\$?"`;
       return {
         shell: 'wsl.exe',
         args: ['--', 'sh', '-c', wslCommand],
       };
     }
 
-    // Native Windows
+    // Native Windows - use cmd /c to ensure exit after command completion
     if (isWindows) {
       return {
-        shell: 'powershell.exe',
-        args: ['-NoLogo', '-Command', fullCommand],
+        shell: 'cmd.exe',
+        args: ['/c', fullCommand],
       };
     }
 
@@ -117,7 +117,16 @@ export function AgentTerminal({
     return true;
   }, []);
 
-  const { containerRef, isLoading, settings, findNext, findPrevious, clearSearch } = useXterm({
+  const {
+    containerRef,
+    isLoading,
+    settings,
+    findNext,
+    findPrevious,
+    clearSearch,
+    terminal,
+    clear,
+  } = useXterm({
     cwd,
     command,
     isActive,
@@ -143,11 +152,57 @@ export function AgentTerminal({
     [isSearchOpen]
   );
 
+  // Handle right-click context menu
+  const handleContextMenu = useCallback(
+    async (e: MouseEvent) => {
+      e.preventDefault();
+
+      const selectedId = await window.electronAPI.contextMenu.show([
+        { id: 'clear', label: '清除终端' },
+        { id: 'separator-1', label: '', type: 'separator' },
+        { id: 'copy', label: '复制', disabled: !terminal?.hasSelection() },
+        { id: 'paste', label: '粘贴' },
+        { id: 'selectAll', label: '全选' },
+      ]);
+
+      if (!selectedId) return;
+
+      switch (selectedId) {
+        case 'clear':
+          clear();
+          break;
+        case 'copy':
+          if (terminal?.hasSelection()) {
+            const selection = terminal.getSelection();
+            navigator.clipboard.writeText(selection);
+          }
+          break;
+        case 'paste':
+          navigator.clipboard.readText().then((text) => {
+            terminal?.paste(text);
+          });
+          break;
+        case 'selectAll':
+          terminal?.selectAll();
+          break;
+      }
+    },
+    [terminal, clear]
+  );
+
   useEffect(() => {
     if (!isActive) return;
     window.addEventListener('keydown', handleSearchKeyDown);
     return () => window.removeEventListener('keydown', handleSearchKeyDown);
   }, [isActive, handleSearchKeyDown]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !isActive) return;
+
+    container.addEventListener('contextmenu', handleContextMenu);
+    return () => container.removeEventListener('contextmenu', handleContextMenu);
+  }, [isActive, handleContextMenu, containerRef]);
 
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: settings.theme.background }}>

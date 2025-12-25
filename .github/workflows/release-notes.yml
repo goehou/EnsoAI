@@ -1,0 +1,127 @@
+name: Release Notes
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name to update (e.g. v0.1.6)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-release-notes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get Previous Tag
+        id: prev_tag
+        run: |
+          CURRENT_TAG="${{ steps.tag.outputs.name }}"
+          PREV_TAG=$(git tag --sort=-version:refname | grep -A1 "^${CURRENT_TAG}$" | tail -1)
+          if [ "$PREV_TAG" = "$CURRENT_TAG" ] || [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          echo "Current: $CURRENT_TAG, Previous: $PREV_TAG"
+
+      - name: Get Commits
+        id: commits
+        run: |
+          COMMITS=$(git log ${{ steps.prev_tag.outputs.prev_tag }}..${{ steps.tag.outputs.name }} --pretty=format:"- %s (%h)" --no-merges | head -50)
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate Release Notes
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+          settings: |
+            {
+              "env": {
+                "ANTHROPIC_BASE_URL": "${{ secrets.ANTHROPIC_BASE_URL }}",
+                "ANTHROPIC_AUTH_TOKEN": "${{ secrets.ANTHROPIC_AUTH_TOKEN }}",
+                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+              }
+            }
+          prompt: |
+            请为 GitHub Release 生成中文发布说明。
+
+            **版本**: ${{ steps.tag.outputs.name }}
+            **仓库**: ${{ github.repository }}
+
+            **本次发布包含的 Commits**:
+            ```
+            ${{ steps.commits.outputs.commits }}
+            ```
+
+            **要求**:
+            1. 使用中文撰写
+            2. 按照以下分类整理 commits:
+               - ✨ Features (feat): 新功能
+               - 🐛 Bug Fixes (fix): 修复
+               - 🔧 Improvements (refactor/perf/style): 优化改进
+               - 🔨 CI/CD (ci/build): 构建部署
+               - 📝 Documentation (docs): 文档
+               - 🧹 Chores (chore): 其他
+            3. 只保留有实际内容的分类，空分类不显示
+            4. 每条记录简洁明了，突出变更要点
+            5. 末尾添加 Full Changelog 链接
+
+            **输出格式** (版本号用实际的 ${{ steps.tag.outputs.name }} 替换，去掉 v 前缀作为文件版本号):
+            ```markdown
+            ## What's Changed
+
+            ### ✨ Features
+            - **功能名称**: 简短描述
+
+            ### 🐛 Bug Fixes
+            - **修复内容**: 简短描述
+
+            ---
+
+            ## 📦 下载
+
+            | 平台 | 文件 |
+            |------|------|
+            | macOS (Apple Silicon) | [EnsoAI-{VERSION}-arm64.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.name }}/EnsoAI-{VERSION}-arm64.dmg) |
+            | macOS (Intel) | [EnsoAI-{VERSION}.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.name }}/EnsoAI-{VERSION}.dmg) |
+            | Windows (x64 安装版) | [EnsoAI-Setup-{VERSION}.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.name }}/EnsoAI-Setup-{VERSION}.exe) |
+
+            > ⚠️ **macOS 用户注意**: 由于应用未签名，首次打开可能提示"已损坏"，请在终端执行以下命令：
+            > ```bash
+            > sudo xattr -dr com.apple.quarantine /Applications/EnsoAI.app
+            > ```
+
+            ---
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.prev_tag.outputs.prev_tag }}...${{ steps.tag.outputs.name }}
+            ```
+
+            生成后，使用 gh 命令更新 release:
+            ```bash
+            gh release edit ${{ steps.tag.outputs.name }} --notes "生成的内容"
+            ```
+
+            请直接执行，不要询问确认。
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

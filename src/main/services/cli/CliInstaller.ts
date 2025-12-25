@@ -161,7 +161,6 @@ if %ERRORLEVEL%==0 (
 
   async install(): Promise<CliInstallStatus> {
     const cliPath = this.getCliPath();
-    console.log('[CliInstaller] Installing CLI to:', cliPath);
 
     try {
       if (isWindows) {
@@ -178,32 +177,24 @@ if %ERRORLEVEL%==0 (
             `powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('PATH', 'User')"`
           );
           if (!stdout.includes(dir)) {
-            // Use PowerShell to safely modify user PATH
             await execAsync(
               `powershell -NoProfile -Command "$currentPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); [Environment]::SetEnvironmentVariable('PATH', \\"$currentPath;${dir}\\", 'User')"`
             );
           }
-        } catch (e) {
-          console.warn('[CliInstaller] PATH modification failed:', e);
+        } catch {
           // PATH modification failed, but script is installed
         }
       } else {
         // macOS/Linux: need sudo to write to /usr/local/bin
         const script = this.generateMacScript();
         const tempPath = join(app.getPath('temp'), 'enso-cli-script');
-        console.log('[CliInstaller] Writing temp script to:', tempPath);
-        console.log('[CliInstaller] App path:', this.getAppPath());
         writeFileSync(tempPath, script, { mode: 0o755 });
 
-        // Use osascript to prompt for admin privileges
-        // Escape double quotes in paths for AppleScript
         const escapedTempPath = tempPath.replace(/"/g, '\\"');
         const escapedCliPath = cliPath.replace(/"/g, '\\"');
         const shellCmd = `cp '${escapedTempPath}' '${escapedCliPath}' && chmod 755 '${escapedCliPath}'`;
-        console.log('[CliInstaller] Running shell command:', shellCmd);
 
         await runWithAdminPrivileges(shellCmd);
-        console.log('[CliInstaller] Command completed successfully');
 
         // Clean up temp file
         try {
@@ -215,7 +206,6 @@ if %ERRORLEVEL%==0 (
 
       return { installed: true, path: cliPath };
     } catch (error) {
-      console.error('[CliInstaller] Install failed:', error);
       return {
         installed: false,
         path: null,

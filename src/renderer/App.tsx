@@ -347,18 +347,13 @@ export default function App() {
   // Listen for open path event from CLI (enso command)
   useEffect(() => {
     const cleanup = window.electronAPI.app.onOpenPath((rawPath) => {
-      console.log('[App] Received onOpenPath:', rawPath);
       // Normalize the path: remove trailing slashes and any stray quotes (Windows CMD issue)
       const path = rawPath.replace(/[\\/]+$/, '').replace(/^["']|["']$/g, '');
       // Check if repo already exists (using path comparison that handles Windows case-insensitivity)
       const existingRepo = repositories.find((r) => pathsEqual(r.path, path));
       if (existingRepo) {
-        // Just select it (use the existing path to maintain consistency)
-        console.log('[App] Repo exists, selecting:', existingRepo.path);
         setSelectedRepo(existingRepo.path);
       } else {
-        // Add new repo
-        console.log('[App] Adding new repo:', path);
         // Handle both forward and back slashes for name extraction
         const name = path.split(/[\\/]/).pop() || path;
         const newRepo: Repository = { name, path };

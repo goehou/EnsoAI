@@ -177,12 +177,9 @@ export function ActionPanel({
             action: async () => {
               // Re-check status at execution time
               const status = await window.electronAPI.cli.getInstallStatus();
-              console.log('[ActionPanel] CLI status:', status);
               if (status.installed) {
-                console.log('[ActionPanel] Uninstalling CLI...');
                 cliUninstall.mutate();
               } else {
-                console.log('[ActionPanel] Installing CLI...');
                 cliInstall.mutate();
               }
             },

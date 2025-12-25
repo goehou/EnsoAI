@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogClose,
@@ -89,6 +89,21 @@ export function WorktreePanel({
       wt.branch?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       wt.path.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const fetchDiffStats = useWorktreeActivityStore((s) => s.fetchDiffStats);
+
+  // Fetch diff stats on mount and periodically (every 10 seconds)
+  useEffect(() => {
+    if (worktrees.length === 0) return;
+    const paths = worktrees.map((wt) => wt.path);
+    // Initial fetch
+    fetchDiffStats(paths);
+    // Periodic refresh
+    const interval = setInterval(() => {
+      fetchDiffStats(paths);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [worktrees, fetchDiffStats]);
 
   return (
     <aside className="flex h-full w-full flex-col border-r bg-background">
@@ -363,10 +378,13 @@ function WorktreeItem({ worktree, isActive, onClick, onDelete }: WorktreeItemPro
 
   // Subscribe to activity store
   const activities = useWorktreeActivityStore((s) => s.activities);
+  const diffStatsMap = useWorktreeActivityStore((s) => s.diffStats);
   const activity = activities[worktree.path] || { agentCount: 0, terminalCount: 0 };
+  const diffStats = diffStatsMap[worktree.path] || { insertions: 0, deletions: 0 };
   const closeAgentSessions = useWorktreeActivityStore((s) => s.closeAgentSessions);
   const closeTerminalSessions = useWorktreeActivityStore((s) => s.closeTerminalSessions);
   const hasActivity = activity.agentCount > 0 || activity.terminalCount > 0;
+  const hasDiffStats = diffStats.insertions > 0 || diffStats.deletions > 0;
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -430,8 +448,8 @@ function WorktreeItem({ worktree, isActive, onClick, onDelete }: WorktreeItemPro
           {worktree.path}
         </div>
 
-        {/* Activity counts */}
-        {hasActivity && (
+        {/* Activity counts and diff stats */}
+        {(hasActivity || hasDiffStats) && (
           <div className="flex items-center gap-3 pl-6 text-xs text-muted-foreground">
             {activity.agentCount > 0 && (
               <span className="flex items-center gap-1">
@@ -443,6 +461,18 @@ function WorktreeItem({ worktree, isActive, onClick, onDelete }: WorktreeItemPro
               <span className="flex items-center gap-1">
                 <Terminal className="h-3 w-3" />
                 {activity.terminalCount}
+              </span>
+            )}
+            {hasDiffStats && (
+              <span className="flex items-center gap-1.5">
+                {diffStats.insertions > 0 && (
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    +{diffStats.insertions}
+                  </span>
+                )}
+                {diffStats.deletions > 0 && (
+                  <span className="text-red-600 dark:text-red-400">-{diffStats.deletions}</span>
+                )}
               </span>
             )}
           </div>

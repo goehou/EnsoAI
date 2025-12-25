@@ -168,4 +168,9 @@ export function registerGitHandlers(): void {
       return git.getCommitDiff(hash, filePath, status);
     }
   );
+
+  ipcMain.handle(IPC_CHANNELS.GIT_DIFF_STATS, async (_, workdir: string) => {
+    const git = getGitService(workdir);
+    return git.getDiffStats();
+  });
 }

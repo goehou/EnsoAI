@@ -1,5 +1,5 @@
-import type { Locale } from '@shared/i18n';
 import { Buffer } from 'node:buffer';
+import type { Locale } from '@shared/i18n';
 import type {
   AgentCliInfo,
   AgentCliStatus,
@@ -67,6 +67,8 @@ const electronAPI = {
       status?: import('@shared/types').FileChangeStatus
     ): Promise<FileDiff> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_COMMIT_DIFF, workdir, hash, filePath, status),
+    getDiffStats: (workdir: string): Promise<{ insertions: number; deletions: number }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_DIFF_STATS, workdir),
   },
 
   // Worktree

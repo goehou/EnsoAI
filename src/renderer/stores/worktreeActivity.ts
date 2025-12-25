@@ -5,10 +5,16 @@ interface WorktreeActivity {
   terminalCount: number;
 }
 
+interface DiffStats {
+  insertions: number;
+  deletions: number;
+}
+
 type CloseHandler = (worktreePath: string) => void;
 
 interface WorktreeActivityState {
   activities: Record<string, WorktreeActivity>;
+  diffStats: Record<string, DiffStats>;
 
   // Agent session tracking
   incrementAgent: (worktreePath: string) => void;
@@ -20,9 +26,14 @@ interface WorktreeActivityState {
   decrementTerminal: (worktreePath: string) => void;
   setTerminalCount: (worktreePath: string, count: number) => void;
 
+  // Diff stats tracking
+  setDiffStats: (worktreePath: string, stats: DiffStats) => void;
+  fetchDiffStats: (worktreePaths: string[]) => Promise<void>;
+
   // Query helpers
   hasActivity: (worktreePath: string) => boolean;
   getActivity: (worktreePath: string) => WorktreeActivity;
+  getDiffStats: (worktreePath: string) => DiffStats;
 
   // Clean up
   clearWorktree: (worktreePath: string) => void;
@@ -37,9 +48,11 @@ interface WorktreeActivityState {
 }
 
 const defaultActivity: WorktreeActivity = { agentCount: 0, terminalCount: 0 };
+const defaultDiffStats: DiffStats = { insertions: 0, deletions: 0 };
 
 export const useWorktreeActivityStore = create<WorktreeActivityState>((set, get) => ({
   activities: {},
+  diffStats: {},
 
   incrementAgent: (worktreePath) =>
     set((state) => {
@@ -107,6 +120,36 @@ export const useWorktreeActivityStore = create<WorktreeActivityState>((set, get)
       };
     }),
 
+  setDiffStats: (worktreePath, stats) =>
+    set((state) => ({
+      diffStats: {
+        ...state.diffStats,
+        [worktreePath]: stats,
+      },
+    })),
+
+  fetchDiffStats: async (worktreePaths) => {
+    // Fetch diff stats for all worktrees in parallel
+    const results = await Promise.all(
+      worktreePaths.map(async (path) => {
+        try {
+          const stats = await window.electronAPI.git.getDiffStats(path);
+          return { path, stats };
+        } catch {
+          return { path, stats: defaultDiffStats };
+        }
+      })
+    );
+    // Batch update all stats at once
+    set((state) => {
+      const newDiffStats = { ...state.diffStats };
+      for (const { path, stats } of results) {
+        newDiffStats[path] = stats;
+      }
+      return { diffStats: newDiffStats };
+    });
+  },
+
   hasActivity: (worktreePath) => {
     const activity = get().activities[worktreePath];
     return activity ? activity.agentCount > 0 || activity.terminalCount > 0 : false;
@@ -114,6 +157,10 @@ export const useWorktreeActivityStore = create<WorktreeActivityState>((set, get)
 
   getActivity: (worktreePath) => {
     return get().activities[worktreePath] || defaultActivity;
+  },
+
+  getDiffStats: (worktreePath) => {
+    return get().diffStats[worktreePath] || defaultDiffStats;
   },
 
   clearWorktree: (worktreePath) =>

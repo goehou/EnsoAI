@@ -322,4 +322,25 @@ export class GitService {
       modified: modifiedContent,
     };
   }
+
+  async getDiffStats(): Promise<{ insertions: number; deletions: number }> {
+    try {
+      // Get stats for both staged and unstaged changes
+      const output = await this.git.diff(['--shortstat', 'HEAD']);
+      // Output format: " 3 files changed, 10 insertions(+), 5 deletions(-)"
+      // or empty if no changes
+      if (!output.trim()) {
+        return { insertions: 0, deletions: 0 };
+      }
+      const insertionsMatch = output.match(/(\d+)\s+insertion/);
+      const deletionsMatch = output.match(/(\d+)\s+deletion/);
+      return {
+        insertions: insertionsMatch ? Number.parseInt(insertionsMatch[1], 10) : 0,
+        deletions: deletionsMatch ? Number.parseInt(deletionsMatch[1], 10) : 0,
+      };
+    } catch {
+      // Repository might not have HEAD (empty repo) or other issues
+      return { insertions: 0, deletions: 0 };
+    }
+  }
 }

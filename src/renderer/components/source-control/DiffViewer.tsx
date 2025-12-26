@@ -1,5 +1,5 @@
 import { DiffEditor, loader } from '@monaco-editor/react';
-import { ChevronDown, ChevronUp, FileCode } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, FileCode } from 'lucide-react';
 import * as monaco from 'monaco-editor';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -14,6 +14,7 @@ import { useI18n } from '@/i18n';
 import { getXtermTheme, isTerminalThemeDark } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { cn } from '@/lib/utils';
+import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import { useSourceControlStore } from '@/stores/sourceControl';
 
@@ -112,6 +113,7 @@ export function DiffViewer({
   const { t } = useI18n();
   const { terminalTheme, sourceControlKeybindings, editorSettings } = useSettingsStore();
   const { navigationDirection, setNavigationDirection } = useSourceControlStore();
+  const navigateToFile = useNavigationStore((s) => s.navigateToFile);
 
   // In commit view, we don't fetch diff - we use the provided externalDiff
   const shouldFetch = !skipFetch && !isCommitView;
@@ -440,6 +442,19 @@ export function DiffViewer({
             title={t('Next change (F8, press again to switch file)')}
           >
             <ChevronDown className="h-4 w-4" />
+          </button>
+
+          {/* Open in editor */}
+          <button
+            type="button"
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+              'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+            )}
+            onClick={() => navigateToFile({ path: `${rootPath}/${file.path}` })}
+            title={t('Open in editor')}
+          >
+            <ExternalLink className="h-4 w-4" />
           </button>
         </div>
       </div>

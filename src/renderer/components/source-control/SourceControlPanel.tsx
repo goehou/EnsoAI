@@ -288,6 +288,27 @@ export function SourceControlPanel({
     }
   }, [currentFileIndex, allFiles, setSelectedFile, setNavigationDirection]);
 
+  // Commit file navigation
+  const currentCommitFileIndex = selectedCommitFile
+    ? commitFiles.findIndex((f) => f.path === selectedCommitFile)
+    : -1;
+
+  const handlePrevCommitFile = useCallback(() => {
+    if (currentCommitFileIndex > 0) {
+      const prevFile = commitFiles[currentCommitFileIndex - 1];
+      setNavigationDirection('prev');
+      setSelectedCommitFile(prevFile.path);
+    }
+  }, [currentCommitFileIndex, commitFiles, setNavigationDirection]);
+
+  const handleNextCommitFile = useCallback(() => {
+    if (currentCommitFileIndex < commitFiles.length - 1) {
+      const nextFile = commitFiles[currentCommitFileIndex + 1];
+      setNavigationDirection('next');
+      setSelectedCommitFile(nextFile.path);
+    }
+  }, [currentCommitFileIndex, commitFiles, setNavigationDirection]);
+
   const handleCommit = useCallback(
     async (message: string) => {
       if (!rootPath || staged.length === 0) return;
@@ -542,6 +563,10 @@ export function SourceControlPanel({
                   isLoading={commitDiffLoading}
                   filesCollapsed={!commitFilesExpanded}
                   onExpandFiles={() => setCommitFilesExpanded(true)}
+                  onPrevFile={handlePrevCommitFile}
+                  onNextFile={handleNextCommitFile}
+                  hasPrevFile={currentCommitFileIndex > 0}
+                  hasNextFile={currentCommitFileIndex < commitFiles.length - 1}
                 />
               </div>
             </>

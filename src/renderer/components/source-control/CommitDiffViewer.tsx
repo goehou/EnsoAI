@@ -11,6 +11,10 @@ interface CommitDiffViewerProps {
   isLoading?: boolean;
   filesCollapsed?: boolean;
   onExpandFiles?: () => void;
+  onPrevFile?: () => void;
+  onNextFile?: () => void;
+  hasPrevFile?: boolean;
+  hasNextFile?: boolean;
 }
 
 export function CommitDiffViewer({
@@ -20,6 +24,10 @@ export function CommitDiffViewer({
   isLoading = false,
   filesCollapsed = false,
   onExpandFiles,
+  onPrevFile,
+  onNextFile,
+  hasPrevFile = false,
+  hasNextFile = false,
 }: CommitDiffViewerProps) {
   const { t } = useI18n();
 
@@ -79,6 +87,10 @@ export function CommitDiffViewer({
           file={{ path: filePath, staged: false }}
           diff={diffData}
           isCommitView
+          onPrevFile={onPrevFile}
+          onNextFile={onNextFile}
+          hasPrevFile={hasPrevFile}
+          hasNextFile={hasNextFile}
         />
       </div>
     </div>

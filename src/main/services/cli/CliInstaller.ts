@@ -7,30 +7,116 @@ import { app } from 'electron';
 
 const execAsync = promisify(exec);
 
-// Run osascript with admin privileges
-function runWithAdminPrivileges(shellCommand: string): Promise<void> {
+// Check if a command exists
+async function commandExists(cmd: string): Promise<boolean> {
+  try {
+    await execAsync(`which ${cmd}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Run command with admin privileges (macOS: osascript, Linux: multiple fallbacks)
+async function runWithAdminPrivileges(shellCommand: string): Promise<void> {
+  if (process.platform === 'darwin') {
+    // macOS: use osascript
+    return new Promise((resolve, reject) => {
+      const appleScript = `do shell script "${shellCommand}" with administrator privileges`;
+      const proc = spawn('osascript', ['-e', appleScript], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stderr = '';
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(stderr || `osascript exited with code ${code}`));
+      });
+
+      proc.on('error', reject);
+
+      setTimeout(() => {
+        proc.kill();
+        reject(new Error('Timeout waiting for admin privileges'));
+      }, 60000);
+    });
+  }
+
+  // Linux: use terminal emulator to run sudo
+  // This is more reliable than zenity/kdialog which may have compatibility issues
+
+  const successMarker = `/tmp/enso-cli-install-success-${Date.now()}`;
+  const escapedCmd = shellCommand.replace(/'/g, "'\\''");
+  const sudoScript = `sudo sh -c '${escapedCmd}' && touch "${successMarker}"; echo ""; read -p "安装完成，按 Enter 关闭此窗口..."`;
+
+  // Try different terminal emulators with their specific argument formats
+  const terminalCommands = [
+    // xfce4-terminal: -e takes a single command string
+    {
+      check: 'xfce4-terminal',
+      cmd: 'xfce4-terminal',
+      args: ['-e', `sh -c '${sudoScript.replace(/'/g, "'\\''")}'`],
+    },
+    // gnome-terminal: -- followed by command and args
+    { check: 'gnome-terminal', cmd: 'gnome-terminal', args: ['--', 'sh', '-c', sudoScript] },
+    // konsole: -e followed by command and args
+    { check: 'konsole', cmd: 'konsole', args: ['-e', 'sh', '-c', sudoScript] },
+    // xterm: -e followed by command and args
+    { check: 'xterm', cmd: 'xterm', args: ['-e', 'sh', '-c', sudoScript] },
+  ];
+
+  for (const term of terminalCommands) {
+    if (await commandExists(term.check)) {
+      return new Promise((resolve, reject) => {
+        const proc = spawn(term.cmd, term.args, {
+          stdio: 'ignore',
+          detached: true,
+        });
+
+        proc.unref();
+
+        // Poll for success marker
+        let attempts = 0;
+        const maxAttempts = 120; // 60 seconds
+        const checkInterval = setInterval(() => {
+          attempts++;
+          if (existsSync(successMarker)) {
+            clearInterval(checkInterval);
+            try {
+              unlinkSync(successMarker);
+            } catch {}
+            resolve();
+          } else if (attempts >= maxAttempts) {
+            clearInterval(checkInterval);
+            reject(new Error('安装超时或已取消'));
+          }
+        }, 500);
+      });
+    }
+  }
+
+  // Fallback to pkexec (requires polkit agent running)
   return new Promise((resolve, reject) => {
-    const appleScript = `do shell script "${shellCommand}" with administrator privileges`;
-    const proc = spawn('osascript', ['-e', appleScript], {
+    const proc = spawn('pkexec', ['sh', '-c', shellCommand], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     let stderr = '';
-    proc.stderr.on('data', (data) => {
+    proc.stderr?.on('data', (data) => {
       stderr += data.toString();
     });
 
     proc.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(stderr || `osascript exited with code ${code}`));
-      }
+      if (code === 0) resolve();
+      else reject(new Error(stderr || `pkexec exited with code ${code}`));
     });
 
     proc.on('error', reject);
 
-    // Timeout after 60 seconds
     setTimeout(() => {
       proc.kill();
       reject(new Error('Timeout waiting for admin privileges'));
@@ -40,6 +126,7 @@ function runWithAdminPrivileges(shellCommand: string): Promise<void> {
 
 const isWindows = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 
 export interface CliInstallStatus {
   installed: boolean;
@@ -149,6 +236,45 @@ if %ERRORLEVEL%==0 (
 `;
   }
 
+  private generateLinuxScript(): string {
+    const exePath = this.getAppPath();
+    return `#!/bin/bash
+# EnsoAI CLI - Open directories in EnsoAI
+
+# Get the target path
+if [ -z "$1" ]; then
+  TARGET_PATH="$(pwd)"
+else
+  # Resolve to absolute path
+  if [[ "$1" = /* ]]; then
+    TARGET_PATH="$1"
+  else
+    TARGET_PATH="$(cd "$(dirname "$1")" 2>/dev/null && pwd)/$(basename "$1")"
+    # Handle the case where $1 is just a directory name
+    if [ -d "$1" ]; then
+      TARGET_PATH="$(cd "$1" && pwd)"
+    fi
+  fi
+fi
+
+# Check if EnsoAI is running
+if pgrep -x "ensoai" > /dev/null 2>&1 || pgrep -f "EnsoAI" > /dev/null 2>&1; then
+  # App is running, use xdg-open with URL scheme
+  ENCODED_PATH=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$TARGET_PATH', safe=''))")
+  xdg-open "enso://open?path=$ENCODED_PATH" 2>/dev/null || \\
+    gio open "enso://open?path=$ENCODED_PATH" 2>/dev/null
+else
+  # App not running, launch it with the path
+  if [ -x "${exePath}" ]; then
+    "${exePath}" --open-path="$TARGET_PATH" &
+  else
+    echo "EnsoAI not found at ${exePath}"
+    exit 1
+  fi
+fi
+`;
+  }
+
   async checkInstalled(): Promise<CliInstallStatus> {
     const cliPath = this.getCliPath();
 
@@ -185,8 +311,8 @@ if %ERRORLEVEL%==0 (
           // PATH modification failed, but script is installed
         }
       } else {
-        // macOS/Linux: need sudo to write to /usr/local/bin
-        const script = this.generateMacScript();
+        // macOS/Linux: need admin privileges to write to /usr/local/bin
+        const script = isLinux ? this.generateLinuxScript() : this.generateMacScript();
         const tempPath = join(app.getPath('temp'), 'enso-cli-script');
         writeFileSync(tempPath, script, { mode: 0o755 });
 

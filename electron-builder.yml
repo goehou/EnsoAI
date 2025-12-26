@@ -94,10 +94,9 @@ linux:
   maintainer: EnsoAI Team <crolin-zhang@users.noreply.github.com>
   category: Development
   icon: build/icons
-
-appImage:
-  # Enable differential download for AppImage (generates .blockmap file)
-  differentialPackage: true
+  # Register enso:// URL scheme
+  mimeTypes:
+    - x-scheme-handler/enso
 
 publish:
   provider: github

@@ -181,7 +181,7 @@ export function registerGitHandlers(): void {
     async (
       _,
       workdir: string,
-      options: { maxDiffLines: number; timeout: number }
+      options: { maxDiffLines: number; timeout: number; model: string }
     ): Promise<{ success: boolean; message?: string; error?: string }> => {
       const resolved = validateWorkdir(workdir);
 
@@ -230,7 +230,7 @@ ${truncatedDiff}`;
           '--tools',
           '',
           '--model',
-          'haiku',
+          options.model || 'haiku',
         ];
 
         const proc = spawn('claude', args, {

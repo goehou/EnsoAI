@@ -476,6 +476,8 @@ export const zhTranslations: Record<string, string> = {
   'Maximum number of diff lines to include': '包含的最大 diff 行数',
   Timeout: '超时',
   'Timeout in seconds': '超时时间（秒）',
+  Model: '模型',
+  'Claude model for generating commit messages': '用于生成 commit 消息的 Claude 模型',
   seconds: '秒',
   'Generate commit message': '生成 commit 消息',
   'Failed to generate commit message': '生成 commit 消息失败',

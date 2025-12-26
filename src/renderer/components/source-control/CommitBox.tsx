@@ -47,6 +47,7 @@ export function CommitBox({
       const result = await window.electronAPI.git.generateCommitMessage(rootPath, {
         maxDiffLines: commitMessageGenerator.maxDiffLines,
         timeout: commitMessageGenerator.timeout,
+        model: commitMessageGenerator.model,
       });
 
       if (result.success && result.message) {

@@ -2362,6 +2362,39 @@ function IntegrationSettings() {
                 <p className="text-xs text-muted-foreground">{t('Timeout in seconds')}</p>
               </div>
             </div>
+
+            {/* Model */}
+            <div className="grid grid-cols-[140px_1fr] items-center gap-4">
+              <span className="text-sm font-medium">{t('Model')}</span>
+              <div className="space-y-1.5">
+                <Select
+                  value={commitMessageGenerator.model ?? 'haiku'}
+                  onValueChange={(v) =>
+                    setCommitMessageGenerator({
+                      model: v as 'default' | 'opus' | 'sonnet' | 'haiku',
+                    })
+                  }
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue>
+                      {(commitMessageGenerator.model ?? 'haiku') === 'default'
+                        ? t('Default')
+                        : (commitMessageGenerator.model ?? 'haiku').charAt(0).toUpperCase() +
+                          (commitMessageGenerator.model ?? 'haiku').slice(1)}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="haiku">Haiku</SelectItem>
+                    <SelectItem value="sonnet">Sonnet</SelectItem>
+                    <SelectItem value="opus">Opus</SelectItem>
+                    <SelectItem value="default">{t('Default')}</SelectItem>
+                  </SelectPopup>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t('Claude model for generating commit messages')}
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </div>

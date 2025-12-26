@@ -158,16 +158,20 @@ export const defaultClaudeCodeIntegrationSettings: ClaudeCodeIntegrationSettings
 };
 
 // Commit message generator settings
+export type CommitMessageModel = 'default' | 'opus' | 'sonnet' | 'haiku';
+
 export interface CommitMessageGeneratorSettings {
   enabled: boolean;
   maxDiffLines: number;
   timeout: number; // in seconds
+  model: CommitMessageModel;
 }
 
 export const defaultCommitMessageGeneratorSettings: CommitMessageGeneratorSettings = {
   enabled: true,
   maxDiffLines: 1000,
   timeout: 60,
+  model: 'haiku',
 };
 
 // Editor settings

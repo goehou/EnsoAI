@@ -54,8 +54,6 @@ EnsoAI 是一款将 **Git Worktree 管理**与 **AI 编程助手**相结合的�
 - 删除 worktree 并可选择同时删除分支
 - 可视化 worktree 列表，显示分支状态
 
-![Worktree 面板](docs/assets/screenshot-worktree.png)
-
 #### 内置文件编辑器
 
 基于 Monaco Editor 的代码编辑器：
@@ -67,6 +65,17 @@ EnsoAI 是一款将 **Git Worktree 管理**与 **AI 编程助手**相结合的�
 - 编辑器状态跨会话持久化
 
 ![文件面板](docs/assets/screenshot-editor.png)
+
+#### 源代码管理
+
+集成的 Git 源代码管理面板：
+
+- 变更列表显示所有修改的文件
+- 支持暂存/取消暂存操作
+- 提交历史浏览
+- 代码差异对比视图
+
+![源代码管理](docs/assets/screenshot-source-control.png)
 
 #### 多标签终端
 

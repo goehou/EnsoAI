@@ -55,9 +55,6 @@ Efficiently manage multiple worktrees in a single workspace:
 - Delete worktrees with optional branch cleanup
 - Visual worktree list with branch status
 
-<!-- ![Worktree Panel](docs/assets/screenshot-worktree.png) -->
-> Screenshot placeholder: Worktree management panel
-
 #### Integrated File Editor
 
 Built-in Monaco Editor for seamless code editing:
@@ -69,6 +66,17 @@ Built-in Monaco Editor for seamless code editing:
 - Editor state persistence across sessions
 
 ![File Panel](docs/assets/screenshot-editor.png)
+
+#### Source Control
+
+Integrated Git source control panel:
+
+- Change list showing all modified files
+- Stage/unstage operations
+- Commit history browser
+- Code diff view
+
+![Source Control](docs/assets/screenshot-source-control.png)
 
 #### Multi-Tab Terminal
 

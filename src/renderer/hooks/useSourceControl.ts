@@ -118,6 +118,7 @@ export function useGitCommit() {
         queryClient.invalidateQueries({ queryKey: ['git', 'file-changes', workdir] }),
         queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] }),
         queryClient.invalidateQueries({ queryKey: ['git', 'log', workdir] }),
+        queryClient.invalidateQueries({ queryKey: ['git', 'log-infinite', workdir] }),
         queryClient.invalidateQueries({ queryKey: ['git', 'file-diff', workdir] }),
       ]);
     },

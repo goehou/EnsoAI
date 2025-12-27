@@ -197,6 +197,25 @@ export const defaultCodeReviewSettings: CodeReviewSettings = {
   continueConversation: true,
 };
 
+// Hapi remote sharing settings
+export interface HapiSettings {
+  enabled: boolean;
+  webappPort: number;
+  cliApiToken: string;
+  telegramBotToken: string;
+  webappUrl: string;
+  allowedChatIds: string;
+}
+
+export const defaultHapiSettings: HapiSettings = {
+  enabled: false,
+  webappPort: 3006,
+  cliApiToken: '',
+  telegramBotToken: '',
+  webappUrl: '',
+  allowedChatIds: '',
+};
+
 // Editor settings
 export type EditorLineNumbers = 'on' | 'off' | 'relative';
 export type EditorWordWrap = 'on' | 'off' | 'wordWrapColumn' | 'bounded';
@@ -339,6 +358,7 @@ interface SettingsState {
   commitMessageGenerator: CommitMessageGeneratorSettings;
   codeReview: CodeReviewSettings;
   allowNightlyUpdates: boolean;
+  hapiSettings: HapiSettings;
 
   setTheme: (theme: Theme) => void;
   setLanguage: (language: Locale) => void;
@@ -371,6 +391,7 @@ interface SettingsState {
   setCommitMessageGenerator: (settings: Partial<CommitMessageGeneratorSettings>) => void;
   setCodeReview: (settings: Partial<CodeReviewSettings>) => void;
   setAllowNightlyUpdates: (enabled: boolean) => void;
+  setHapiSettings: (settings: Partial<HapiSettings>) => void;
 }
 
 const defaultAgentSettings: AgentSettings = {
@@ -415,6 +436,7 @@ export const useSettingsStore = create<SettingsState>()(
       commitMessageGenerator: defaultCommitMessageGeneratorSettings,
       codeReview: defaultCodeReviewSettings,
       allowNightlyUpdates: false,
+      hapiSettings: defaultHapiSettings,
 
       setTheme: (theme) => {
         const terminalTheme = get().terminalTheme;
@@ -535,6 +557,10 @@ export const useSettingsStore = create<SettingsState>()(
         // Notify main process to update autoUpdater setting
         window.electronAPI.updater.setAllowPrerelease(allowNightlyUpdates);
       },
+      setHapiSettings: (settings) =>
+        set((state) => ({
+          hapiSettings: { ...state.hapiSettings, ...settings },
+        })),
     }),
     {
       name: 'enso-settings',

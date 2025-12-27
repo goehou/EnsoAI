@@ -5,6 +5,7 @@ import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
 import { registerFileHandlers, stopAllFileWatchers } from './files';
 import { clearAllGitServices, registerGitHandlers } from './git';
+import { cleanupHapi, registerHapiHandlers } from './hapi';
 import { registerNotificationHandlers } from './notification';
 import { registerSearchHandlers } from './search';
 import { registerSettingsHandlers } from './settings';
@@ -27,11 +28,13 @@ export function registerIpcHandlers(): void {
   registerNotificationHandlers();
   registerUpdaterHandlers();
   registerSearchHandlers();
+  registerHapiHandlers();
 }
 
 export async function cleanupAllResources(): Promise<void> {
   // Stop all running processes first (sync, fast)
   destroyAllTerminals();
+  cleanupHapi();
 
   // Stop file watchers with timeout to prevent hanging
   const CLEANUP_TIMEOUT = 3000;

@@ -402,6 +402,40 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SEARCH_CONTENT, params),
     checkRipgrep: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_CHECK_RG),
   },
+
+  // Hapi Remote Sharing
+  hapi: {
+    start: (config: {
+      webappPort: number;
+      cliApiToken: string;
+      telegramBotToken: string;
+      webappUrl: string;
+      allowedChatIds: string;
+    }): Promise<{ running: boolean; pid?: number; port?: number; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.HAPI_START, config),
+    stop: (): Promise<{ running: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.HAPI_STOP),
+    restart: (config: {
+      webappPort: number;
+      cliApiToken: string;
+      telegramBotToken: string;
+      webappUrl: string;
+      allowedChatIds: string;
+    }): Promise<{ running: boolean; pid?: number; port?: number; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.HAPI_RESTART, config),
+    getStatus: (): Promise<{ running: boolean; pid?: number; port?: number; error?: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.HAPI_GET_STATUS),
+    onStatusChanged: (
+      callback: (status: { running: boolean; pid?: number; port?: number; error?: string }) => void
+    ): (() => void) => {
+      const handler = (
+        _: unknown,
+        status: { running: boolean; pid?: number; port?: number; error?: string }
+      ) => callback(status);
+      ipcRenderer.on(IPC_CHANNELS.HAPI_STATUS_CHANGED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.HAPI_STATUS_CHANGED, handler);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

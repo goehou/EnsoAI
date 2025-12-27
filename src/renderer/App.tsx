@@ -1,4 +1,9 @@
-import type { GitWorktree, WorktreeCreateOptions } from '@shared/types';
+import type {
+  GitWorktree,
+  WorktreeCreateOptions,
+  WorktreeMergeOptions,
+  WorktreeMergeResult,
+} from '@shared/types';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useState } from 'react';
 import { panelTransition, type Repository, type TabId } from './App/constants';
@@ -20,9 +25,18 @@ import {
   DialogPopup,
   DialogTitle,
 } from './components/ui/dialog';
+import { MergeEditor, MergeWorktreeDialog } from './components/worktree';
 import { useEditor } from './hooks/useEditor';
 import { useGitBranches, useGitInit } from './hooks/useGit';
-import { useWorktreeCreate, useWorktreeList, useWorktreeRemove } from './hooks/useWorktree';
+import {
+  useWorktreeCreate,
+  useWorktreeList,
+  useWorktreeMerge,
+  useWorktreeMergeAbort,
+  useWorktreeMergeContinue,
+  useWorktreeRemove,
+  useWorktreeResolveConflict,
+} from './hooks/useWorktree';
 import { useI18n } from './i18n';
 import { useNavigationStore } from './stores/navigation';
 import { useSettingsStore } from './stores/settings';
@@ -53,6 +67,11 @@ export default function App() {
 
   // Close confirmation dialog state
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+
+  // Merge dialog state
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergeWorktree, setMergeWorktree] = useState<GitWorktree | null>(null);
+  const [mergeConflicts, setMergeConflicts] = useState<WorktreeMergeResult | null>(null);
 
   // Panel resize hook
   const { repositoryWidth, worktreeWidth, resizing, handleResizeStart } = usePanelResize();
@@ -161,6 +180,12 @@ export default function App() {
   const createWorktreeMutation = useWorktreeCreate();
   const removeWorktreeMutation = useWorktreeRemove();
   const gitInitMutation = useGitInit();
+
+  // Merge mutations
+  const mergeMutation = useWorktreeMerge();
+  const resolveConflictMutation = useWorktreeResolveConflict();
+  const abortMergeMutation = useWorktreeMergeAbort();
+  const continueMergeMutation = useWorktreeMergeContinue();
 
   // Load saved repositories and selection from localStorage
   useEffect(() => {
@@ -378,6 +403,53 @@ export default function App() {
     }
   };
 
+  // Merge handlers
+  const handleOpenMergeDialog = (worktree: GitWorktree) => {
+    setMergeWorktree(worktree);
+    setMergeDialogOpen(true);
+  };
+
+  const handleMerge = async (options: WorktreeMergeOptions): Promise<WorktreeMergeResult> => {
+    if (!selectedRepo) {
+      return { success: false, merged: false, error: 'No repository selected' };
+    }
+    return mergeMutation.mutateAsync({ workdir: selectedRepo, options });
+  };
+
+  const handleMergeConflicts = (result: WorktreeMergeResult) => {
+    setMergeConflicts(result);
+  };
+
+  const handleResolveConflict = async (file: string, content: string) => {
+    if (!selectedRepo) return;
+    await resolveConflictMutation.mutateAsync({
+      workdir: selectedRepo,
+      resolution: { file, content },
+    });
+  };
+
+  const handleAbortMerge = async () => {
+    if (!selectedRepo) return;
+    await abortMergeMutation.mutateAsync({ workdir: selectedRepo });
+    setMergeConflicts(null);
+    refetch();
+  };
+
+  const handleCompleteMerge = async (message: string) => {
+    if (!selectedRepo) return;
+    const result = await continueMergeMutation.mutateAsync({ workdir: selectedRepo, message });
+    if (result.success) {
+      setMergeConflicts(null);
+      refetch();
+      refetchBranches();
+    }
+  };
+
+  const getConflictContent = async (file: string) => {
+    if (!selectedRepo) throw new Error('No repository selected');
+    return window.electronAPI.worktree.getConflictContent(selectedRepo, file);
+  };
+
   return (
     <div className={`flex h-screen overflow-hidden ${resizing ? 'select-none' : ''}`}>
       {/* Column 1: Repository Sidebar */}
@@ -432,6 +504,7 @@ export default function App() {
               onSelectWorktree={handleSelectWorktree}
               onCreateWorktree={handleCreateWorktree}
               onRemoveWorktree={handleRemoveWorktree}
+              onMergeWorktree={handleOpenMergeDialog}
               onInitGit={handleInitGit}
               onRefresh={() => {
                 refetch();
@@ -526,6 +599,36 @@ export default function App() {
           </DialogFooter>
         </DialogPopup>
       </Dialog>
+
+      {/* Merge Worktree Dialog */}
+      {mergeWorktree && (
+        <MergeWorktreeDialog
+          open={mergeDialogOpen}
+          onOpenChange={setMergeDialogOpen}
+          worktree={mergeWorktree}
+          branches={branches}
+          isLoading={mergeMutation.isPending}
+          onMerge={handleMerge}
+          onConflicts={handleMergeConflicts}
+        />
+      )}
+
+      {/* Merge Conflict Editor */}
+      {mergeConflicts?.conflicts && mergeConflicts.conflicts.length > 0 && (
+        <Dialog open={true} onOpenChange={() => {}}>
+          <DialogPopup className="h-[90vh] max-w-[95vw] p-0">
+            <MergeEditor
+              conflicts={mergeConflicts.conflicts}
+              workdir={selectedRepo || ''}
+              sourceBranch={mergeWorktree?.branch || undefined}
+              onResolve={handleResolveConflict}
+              onComplete={handleCompleteMerge}
+              onAbort={handleAbortMerge}
+              getConflictContent={getConflictContent}
+            />
+          </DialogPopup>
+        </Dialog>
+      )}
     </div>
   );
 }

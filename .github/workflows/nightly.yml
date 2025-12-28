@@ -123,13 +123,6 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-${{ matrix.arch }}-electron-
 
-      - name: Restore electron-rebuild cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .electron-rebuild-cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-rebuild-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-rebuild-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -158,13 +151,6 @@ jobs:
             ~/Library/Caches/electron
             ~/Library/Caches/electron-builder
           key: ${{ runner.os }}-${{ matrix.arch }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-      - name: Save electron-rebuild cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .electron-rebuild-cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-rebuild-${{ hashFiles('**/pnpm-lock.yaml') }}
 
   build-windows:
     needs: [prepare, build-app]
@@ -206,13 +192,6 @@ jobs:
           key: ${{ runner.os }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-electron-
 
-      - name: Restore electron-rebuild cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .electron-rebuild-cache
-          key: ${{ runner.os }}-rebuild-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-rebuild-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -241,13 +220,6 @@ jobs:
             ~/AppData/Local/electron/Cache
             ~/AppData/Local/electron-builder/Cache
           key: ${{ runner.os }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-      - name: Save electron-rebuild cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .electron-rebuild-cache
-          key: ${{ runner.os }}-rebuild-${{ hashFiles('**/pnpm-lock.yaml') }}
 
   build-linux:
     needs: [prepare, build-app]
@@ -288,13 +260,6 @@ jobs:
           key: ${{ runner.os }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-electron-
 
-      - name: Restore electron-rebuild cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .electron-rebuild-cache
-          key: ${{ runner.os }}-rebuild-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-rebuild-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -323,13 +288,6 @@ jobs:
             ~/.cache/electron
             ~/.cache/electron-builder
           key: ${{ runner.os }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-      - name: Save electron-rebuild cache
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .electron-rebuild-cache
-          key: ${{ runner.os }}-rebuild-${{ hashFiles('**/pnpm-lock.yaml') }}
 
   release:
     needs: [prepare, build-mac, build-windows, build-linux]

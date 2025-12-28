@@ -198,7 +198,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Windows
-        run: npx electron-builder --win --x64 --publish never -c.win.target=nsis -c.win.target=portable
+        run: npx electron-builder --win nsis --win portable --x64 --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

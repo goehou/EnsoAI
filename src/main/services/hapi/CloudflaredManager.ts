@@ -1,10 +1,22 @@
 import { execFile } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
-import { bin, install, Tunnel } from 'cloudflared';
+import { install, Tunnel, use } from 'cloudflared';
+import { app } from 'electron';
 
 const execFileAsync = promisify(execFile);
+
+// Use custom bin path in user data directory (asar is read-only)
+const cloudflaredBin = path.join(
+  app.getPath('userData'),
+  'bin',
+  process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared'
+);
+
+// Set the custom bin path
+use(cloudflaredBin);
 
 export interface CloudflaredStatus {
   installed: boolean;
@@ -30,12 +42,12 @@ class CloudflaredManager extends EventEmitter {
   private status: CloudflaredStatus = { installed: false, running: false };
 
   async checkInstalled(): Promise<{ installed: boolean; version?: string }> {
-    if (!fs.existsSync(bin)) {
+    if (!fs.existsSync(cloudflaredBin)) {
       return { installed: false };
     }
 
     try {
-      const { stdout } = await execFileAsync(bin, ['--version']);
+      const { stdout } = await execFileAsync(cloudflaredBin, ['--version']);
       const version = stdout.trim().split(' ')[2] || stdout.trim();
       this.status.installed = true;
       this.status.version = version;
@@ -47,7 +59,13 @@ class CloudflaredManager extends EventEmitter {
 
   async install(): Promise<{ installed: boolean; version?: string; error?: string }> {
     try {
-      await install(bin);
+      // Ensure bin directory exists
+      const binDir = path.dirname(cloudflaredBin);
+      if (!fs.existsSync(binDir)) {
+        fs.mkdirSync(binDir, { recursive: true });
+      }
+
+      await install(cloudflaredBin);
       const result = await this.checkInstalled();
       this.emit('statusChanged', this.getStatus());
       return result;

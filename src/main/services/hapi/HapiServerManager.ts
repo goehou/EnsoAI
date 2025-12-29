@@ -2,8 +2,8 @@ import type { ChildProcess } from 'node:child_process';
 import { exec, spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
+import { findLoginShell, getEnhancedPath } from '../terminal/PtyManager';
 
 const execAsync = promisify(exec);
 
@@ -35,23 +35,6 @@ export interface HapiStatus {
 
 const isWindows = process.platform === 'win32';
 
-/**
- * Find user's default shell
- */
-function findUserShell(): string {
-  const userShell = process.env.SHELL;
-  if (userShell && existsSync(userShell)) {
-    return userShell;
-  }
-  const shells = ['/bin/zsh', '/bin/bash', '/bin/sh'];
-  for (const shell of shells) {
-    if (existsSync(shell)) {
-      return shell;
-    }
-  }
-  return '/bin/sh';
-}
-
 class HapiServerManager extends EventEmitter {
   private process: ChildProcess | null = null;
   private status: HapiStatus = { running: false };
@@ -74,21 +57,13 @@ class HapiServerManager extends EventEmitter {
    * Execute command in login shell to load user's environment
    */
   private async execInLoginShell(command: string, timeout = 5000): Promise<string> {
-    if (isWindows) {
-      const { stdout } = await execAsync(command, { timeout });
-      return stdout;
-    }
-
-    const shell = findUserShell();
-    const escapedCommand = command.replace(/"/g, '\\"');
-
-    try {
-      const { stdout } = await execAsync(`${shell} -ilc "${escapedCommand}"`, { timeout });
-      return stdout;
-    } catch {
-      const { stdout } = await execAsync(`${shell} -lc "${escapedCommand}"`, { timeout });
-      return stdout;
-    }
+    const { shell, args } = findLoginShell();
+    const fullCommand = `${shell} ${args.map((a) => `"${a}"`).join(' ')} "${command.replace(/"/g, '\\"')}"`;
+    const { stdout } = await execAsync(fullCommand, {
+      timeout,
+      env: { ...process.env, PATH: getEnhancedPath() },
+    });
+    return stdout;
   }
 
   /**
@@ -175,6 +150,7 @@ class HapiServerManager extends EventEmitter {
 
     const env: Record<string, string> = {
       ...process.env,
+      PATH: getEnhancedPath(),
       WEBAPP_PORT: String(config.webappPort),
     } as Record<string, string>;
 
@@ -195,13 +171,14 @@ class HapiServerManager extends EventEmitter {
       // Check if hapi is globally installed
       const hapiCommand = await this.getHapiCommand();
       const isGlobal = hapiCommand === 'hapi';
-      const spawnCommand = isGlobal ? 'hapi' : 'npx';
-      const spawnArgs = isGlobal ? ['server'] : ['-y', '@twsxtd/hapi', 'server'];
 
-      this.process = spawn(spawnCommand, spawnArgs, {
+      // Use login shell to ensure proper environment (nvm, etc.)
+      const { shell, args: shellArgs } = findLoginShell();
+      const command = isGlobal ? 'hapi server' : 'npx -y @twsxtd/hapi server';
+
+      this.process = spawn(shell, [...shellArgs, command], {
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: true,
         detached: process.platform !== 'win32',
       });
 

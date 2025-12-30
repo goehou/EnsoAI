@@ -144,12 +144,13 @@ export function AgentTerminal({
 
     // WSL environment: run through WSL with user's default shell
     if (environment === 'wsl' && isWindows) {
-      // sh -lc loads login profile, exec $SHELL replaces with user's shell (zsh/bash/etc.)
+      // Use -e to run command directly, sh -lc loads login profile
+      // exec $SHELL replaces with user's shell (zsh/bash/etc.)
       const escapedCommand = fullCommand.replace(/"/g, '\\"');
       return {
         command: {
           shell: 'wsl.exe',
-          args: ['--', 'sh', '-lc', `exec "$SHELL" -ilc "${escapedCommand}"`],
+          args: ['-e', 'sh', '-lc', `exec "$SHELL" -ilc "${escapedCommand}"`],
         },
         env: envVars,
       };

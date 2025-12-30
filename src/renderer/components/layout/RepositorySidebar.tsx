@@ -58,6 +58,7 @@ export function RepositorySidebar({
   // Drag reorder
   const draggedIndexRef = useRef<number | null>(null);
   const dragImageRef = useRef<HTMLDivElement | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number, repo: Repository) => {
     draggedIndexRef.current = index;
@@ -91,11 +92,19 @@ export function RepositorySidebar({
       dragImageRef.current = null;
     }
     draggedIndexRef.current = null;
+    setDropTargetIndex(null);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    if (draggedIndexRef.current !== null && draggedIndexRef.current !== index) {
+      setDropTargetIndex(index);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDropTargetIndex(null);
   }, []);
 
   const handleDrop = useCallback(
@@ -105,6 +114,7 @@ export function RepositorySidebar({
       if (fromIndex !== null && fromIndex !== toIndex && onReorderRepositories) {
         onReorderRepositories(fromIndex, toIndex);
       }
+      setDropTargetIndex(null);
     },
     [onReorderRepositories]
   );
@@ -196,47 +206,62 @@ export function RepositorySidebar({
         ) : (
           <div className="space-y-1">
             {filteredRepos.map(({ repo, originalIndex }) => (
-              <button
-                type="button"
-                key={repo.path}
-                draggable={!searchQuery}
-                onDragStart={(e) => handleDragStart(e, originalIndex, repo)}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, originalIndex)}
-                onClick={() => onSelectRepo(repo.path)}
-                onContextMenu={(e) => handleContextMenu(e, repo)}
-                className={cn(
-                  'flex w-full flex-col items-start gap-1 rounded-lg p-3 text-left transition-colors',
-                  selectedRepo === repo.path
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-accent/50'
-                )}
-              >
-                {/* Repo name */}
-                <div className="flex w-full items-center gap-2">
-                  <FolderGit2
-                    className={cn(
-                      'h-4 w-4 shrink-0',
-                      selectedRepo === repo.path
-                        ? 'text-accent-foreground'
-                        : 'text-muted-foreground'
-                    )}
-                  />
-                  <span className="truncate font-medium">{repo.name}</span>
-                </div>
-                {/* Path */}
-                <div
+              <div key={repo.path} className="relative">
+                {/* Drop indicator - top */}
+                {dropTargetIndex === originalIndex &&
+                  draggedIndexRef.current !== null &&
+                  draggedIndexRef.current > originalIndex && (
+                    <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-primary rounded-full" />
+                  )}
+                <button
+                  type="button"
+                  draggable={!searchQuery}
+                  onDragStart={(e) => handleDragStart(e, originalIndex, repo)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, originalIndex)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, originalIndex)}
+                  onClick={() => onSelectRepo(repo.path)}
+                  onContextMenu={(e) => handleContextMenu(e, repo)}
                   className={cn(
-                    'w-full truncate pl-6 text-xs',
+                    'flex w-full flex-col items-start gap-1 rounded-lg p-3 text-left transition-colors',
                     selectedRepo === repo.path
-                      ? 'text-accent-foreground/70'
-                      : 'text-muted-foreground'
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/50',
+                    draggedIndexRef.current === originalIndex && 'opacity-50'
                   )}
                 >
-                  {repo.path}
-                </div>
-              </button>
+                  {/* Repo name */}
+                  <div className="flex w-full items-center gap-2">
+                    <FolderGit2
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        selectedRepo === repo.path
+                          ? 'text-accent-foreground'
+                          : 'text-muted-foreground'
+                      )}
+                    />
+                    <span className="truncate font-medium">{repo.name}</span>
+                  </div>
+                  {/* Path */}
+                  <div
+                    className={cn(
+                      'w-full truncate pl-6 text-xs',
+                      selectedRepo === repo.path
+                        ? 'text-accent-foreground/70'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {repo.path}
+                  </div>
+                </button>
+                {/* Drop indicator - bottom */}
+                {dropTargetIndex === originalIndex &&
+                  draggedIndexRef.current !== null &&
+                  draggedIndexRef.current < originalIndex && (
+                    <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 bg-primary rounded-full" />
+                  )}
+              </div>
             ))}
           </div>
         )}

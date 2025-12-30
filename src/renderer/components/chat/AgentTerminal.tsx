@@ -140,6 +140,7 @@ export function AgentTerminal({
     }
 
     const fullCommand = `${agentCommand} ${agentArgs.join(' ')}`.trim();
+    const shellName = resolvedShell.shell.toLowerCase();
 
     // WSL environment: run through WSL with interactive login shell
     if (environment === 'wsl' && isWindows) {
@@ -149,6 +150,18 @@ export function AgentTerminal({
         command: {
           shell: 'wsl.exe',
           args: ['--', 'sh', '-c', wslCommand],
+        },
+        env: envVars,
+      };
+    }
+
+    // PowerShell: wrap command in script block to preserve argument structure
+    // Without this, PowerShell interprets args like --session-id as its own parameters
+    if (shellName.includes('powershell') || shellName.includes('pwsh')) {
+      return {
+        command: {
+          shell: resolvedShell.shell,
+          args: [...resolvedShell.execArgs, `& { ${fullCommand} }`],
         },
         env: envVars,
       };

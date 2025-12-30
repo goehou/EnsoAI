@@ -1,6 +1,6 @@
 export type BuiltinAgentId = 'claude' | 'codex' | 'droid' | 'gemini' | 'auggie' | 'cursor';
 
-export type AgentEnvironment = 'native' | 'wsl' | 'hapi' | 'happy';
+export type AgentEnvironment = 'native' | 'hapi' | 'happy';
 
 export interface AgentCliInfo {
   id: string;

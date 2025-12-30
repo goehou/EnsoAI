@@ -11,7 +11,7 @@ interface AgentTerminalProps {
   cwd?: string;
   sessionId?: string;
   agentCommand?: string;
-  environment?: 'native' | 'wsl' | 'hapi' | 'happy';
+  environment?: 'native' | 'hapi' | 'happy';
   initialized?: boolean;
   activated?: boolean;
   isActive?: boolean;

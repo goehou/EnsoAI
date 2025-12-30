@@ -16,7 +16,7 @@ export interface Session {
   activated?: boolean; // true after user presses Enter, only activated sessions are persisted
   repoPath: string; // repository path this session belongs to
   cwd: string; // worktree path this session belongs to
-  environment?: 'native' | 'wsl' | 'hapi' | 'happy'; // execution environment (default: native)
+  environment?: 'native' | 'hapi' | 'happy'; // execution environment (default: native)
   displayOrder?: number; // order in SessionBar (lower = first), used for drag reorder
 }
 

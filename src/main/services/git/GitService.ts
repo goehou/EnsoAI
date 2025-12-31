@@ -139,6 +139,10 @@ export class GitService {
     await this.git.pull(remote, branch);
   }
 
+  async fetch(remote = 'origin'): Promise<void> {
+    await this.git.fetch(remote);
+  }
+
   async checkout(branch: string): Promise<void> {
     await this.git.checkout(branch);
   }

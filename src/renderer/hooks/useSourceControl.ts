@@ -135,3 +135,16 @@ export function useGitCommit() {
     },
   });
 }
+
+export function useGitFetch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ workdir }: { workdir: string }) => {
+      await window.electronAPI.git.fetch(workdir);
+    },
+    onSuccess: async (_, { workdir }) => {
+      await queryClient.invalidateQueries({ queryKey: ['git', 'status', workdir] });
+    },
+  });
+}

@@ -31,7 +31,7 @@ import {
 import { toastManager } from '@/components/ui/toast';
 import { useGitPull, useGitPush, useGitStatus } from '@/hooks/useGit';
 import { useCommitDiff, useCommitFiles, useGitHistoryInfinite } from '@/hooks/useGitHistory';
-import { useFileChanges } from '@/hooks/useSourceControl';
+import { useFileChanges, useGitFetch } from '@/hooks/useSourceControl';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useSourceControlStore } from '@/stores/sourceControl';
@@ -83,6 +83,7 @@ export function SourceControlPanel({
   const { data: gitStatus, refetch: refetchStatus } = useGitStatus(rootPath ?? null, isActive);
   const pushMutation = useGitPush();
   const pullMutation = useGitPull();
+  const fetchMutation = useGitFetch();
   const isSyncing = pushMutation.isPending || pullMutation.isPending;
 
   const {
@@ -388,11 +389,15 @@ export function SourceControlPanel({
                         onUnstage={handleUnstage}
                         onDiscard={handleDiscard}
                         onDeleteUntracked={handleDeleteUntracked}
-                        onRefresh={() => {
+                        onRefresh={async () => {
+                          if (rootPath) {
+                            await fetchMutation.mutateAsync({ workdir: rootPath });
+                          }
                           refetch();
                           refetchCommits();
+                          refetchStatus();
                         }}
-                        isRefreshing={isFetching}
+                        isRefreshing={isFetching || fetchMutation.isPending}
                         repoPath={rootPath}
                       />
                     </div>

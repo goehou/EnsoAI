@@ -4,6 +4,7 @@ export const IPC_CHANNELS = {
   GIT_COMMIT: 'git:commit',
   GIT_PUSH: 'git:push',
   GIT_PULL: 'git:pull',
+  GIT_FETCH: 'git:fetch',
   GIT_BRANCH_LIST: 'git:branch:list',
   GIT_BRANCH_CREATE: 'git:branch:create',
   GIT_BRANCH_CHECKOUT: 'git:branch:checkout',

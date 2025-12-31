@@ -113,6 +113,11 @@ export function registerGitHandlers(): void {
     }
   );
 
+  ipcMain.handle(IPC_CHANNELS.GIT_FETCH, async (_, workdir: string, remote?: string) => {
+    const git = getGitService(workdir);
+    await git.fetch(remote);
+  });
+
   ipcMain.handle(
     IPC_CHANNELS.GIT_DIFF,
     async (_, workdir: string, options?: { staged?: boolean }) => {

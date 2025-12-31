@@ -16,10 +16,18 @@ export interface UpdateStatus {
   error?: string;
 }
 
+// Check interval: 4 hours
+const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+// Minimum interval between focus checks: 30 minutes
+const MIN_FOCUS_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+
 class AutoUpdaterService {
   private mainWindow: BrowserWindow | null = null;
   private updateDownloaded = false;
   private _isQuittingForUpdate = false;
+  private checkIntervalId: NodeJS.Timeout | null = null;
+  private lastCheckTime = 0;
+  private onFocusHandler: (() => void) | null = null;
 
   init(window: BrowserWindow): void {
     this.mainWindow = window;
@@ -71,6 +79,31 @@ class AutoUpdaterService {
     setTimeout(() => {
       this.checkForUpdates();
     }, 3000);
+
+    // Set up periodic check (every 4 hours)
+    this.checkIntervalId = setInterval(() => {
+      this.checkForUpdates();
+    }, CHECK_INTERVAL_MS);
+
+    // Check on window focus (with 30-minute debounce)
+    this.onFocusHandler = () => {
+      const now = Date.now();
+      if (now - this.lastCheckTime >= MIN_FOCUS_CHECK_INTERVAL_MS) {
+        this.checkForUpdates();
+      }
+    };
+    window.on('focus', this.onFocusHandler);
+  }
+
+  cleanup(): void {
+    if (this.checkIntervalId) {
+      clearInterval(this.checkIntervalId);
+      this.checkIntervalId = null;
+    }
+    if (this.mainWindow && this.onFocusHandler) {
+      this.mainWindow.off('focus', this.onFocusHandler);
+      this.onFocusHandler = null;
+    }
   }
 
   private sendStatus(status: UpdateStatus): void {
@@ -81,6 +114,7 @@ class AutoUpdaterService {
 
   async checkForUpdates(): Promise<void> {
     try {
+      this.lastCheckTime = Date.now();
       await autoUpdater.checkForUpdates();
     } catch (error) {
       console.error('Failed to check for updates:', error);

@@ -117,6 +117,7 @@ export const BUILTIN_AGENT_IDS: BuiltinAgentId[] = [
   'gemini',
   'auggie',
   'cursor',
+  'opencode',
 ];
 
 // Terminal keybindings
@@ -446,6 +447,7 @@ const defaultAgentSettings: AgentSettings = {
   gemini: { enabled: false, isDefault: false },
   auggie: { enabled: false, isDefault: false },
   cursor: { enabled: false, isDefault: false },
+  opencode: { enabled: false, isDefault: false },
 };
 
 // No default detection status - all agents need to be detected

@@ -294,7 +294,23 @@ ${truncatedDiff}`;
           }
 
           try {
-            const result = JSON.parse(stdout);
+            // stdout 可能包含 ANSI 转义码或额外日志，提取 JSON 行
+            // biome-ignore lint/complexity/useRegexLiterals: Using RegExp constructor to avoid control character lint error
+            const ansiRegex = new RegExp(
+              '[\\u001b\\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]',
+              'g'
+            );
+            let jsonStr = stdout.replace(ansiRegex, '').trim();
+            const lines = jsonStr.split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+                jsonStr = trimmed;
+                break;
+              }
+            }
+
+            const result = JSON.parse(jsonStr);
             if (result.type === 'result' && result.subtype === 'success' && result.result) {
               resolve({ success: true, message: result.result });
             } else {
@@ -303,8 +319,9 @@ ${truncatedDiff}`;
                 error: result.error || 'Unknown error',
               });
             }
-          } catch {
-            console.error('[GenerateCommitMsg] Failed to parse stdout:', stdout);
+          } catch (err) {
+            console.error('[GenerateCommitMsg] Failed to parse stdout:', JSON.stringify(stdout));
+            console.error('[GenerateCommitMsg] Parse error:', err);
             console.error('[GenerateCommitMsg] stderr:', stderr);
             resolve({ success: false, error: 'Failed to parse response' });
           }

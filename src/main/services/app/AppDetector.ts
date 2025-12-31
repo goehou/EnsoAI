@@ -97,20 +97,177 @@ export class AppDetector {
 
   private async detectWindowsAppsFromRegistry(): Promise<DetectedApp[]> {
     const detected: DetectedApp[] = [];
+    const detectedIds = new Set<string>();
 
-    // JetBrains product name patterns and their bundleIds
-    const jetbrainsProducts: Record<string, { id: string; category: AppCategory }> = {
-      'IntelliJ IDEA': { id: 'com.jetbrains.intellij', category: AppCategory.Editor },
-      WebStorm: { id: 'com.jetbrains.WebStorm', category: AppCategory.Editor },
-      PyCharm: { id: 'com.jetbrains.pycharm', category: AppCategory.Editor },
-      GoLand: { id: 'com.jetbrains.goland', category: AppCategory.Editor },
-      CLion: { id: 'com.jetbrains.CLion', category: AppCategory.Editor },
-      RustRover: { id: 'com.jetbrains.rustrover', category: AppCategory.Editor },
-      Rider: { id: 'com.jetbrains.rider', category: AppCategory.Editor },
-      PhpStorm: { id: 'com.jetbrains.PhpStorm', category: AppCategory.Editor },
-      DataGrip: { id: 'com.jetbrains.datagrip', category: AppCategory.Editor },
-      'Android Studio': { id: 'com.google.android.studio', category: AppCategory.Editor },
-      Fleet: { id: 'com.jetbrains.fleet', category: AppCategory.Editor },
+    // App detection patterns: DisplayName pattern -> app info
+    // exePatterns: patterns to find exe in InstallLocation
+    type AppPattern = {
+      id: string;
+      name: string;
+      category: AppCategory;
+      exePatterns?: string[]; // Relative paths from InstallLocation
+    };
+
+    const appPatterns: Record<string, AppPattern> = {
+      // JetBrains IDEs
+      'IntelliJ IDEA': {
+        id: 'com.jetbrains.intellij',
+        name: 'IntelliJ IDEA',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/idea64.exe'],
+      },
+      WebStorm: {
+        id: 'com.jetbrains.WebStorm',
+        name: 'WebStorm',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/webstorm64.exe'],
+      },
+      PyCharm: {
+        id: 'com.jetbrains.pycharm',
+        name: 'PyCharm',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/pycharm64.exe'],
+      },
+      GoLand: {
+        id: 'com.jetbrains.goland',
+        name: 'GoLand',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/goland64.exe'],
+      },
+      CLion: {
+        id: 'com.jetbrains.CLion',
+        name: 'CLion',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/clion64.exe'],
+      },
+      RustRover: {
+        id: 'com.jetbrains.rustrover',
+        name: 'RustRover',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/rustrover64.exe'],
+      },
+      Rider: {
+        id: 'com.jetbrains.rider',
+        name: 'Rider',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/rider64.exe'],
+      },
+      PhpStorm: {
+        id: 'com.jetbrains.PhpStorm',
+        name: 'PhpStorm',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/phpstorm64.exe'],
+      },
+      DataGrip: {
+        id: 'com.jetbrains.datagrip',
+        name: 'DataGrip',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/datagrip64.exe'],
+      },
+      'Android Studio': {
+        id: 'com.google.android.studio',
+        name: 'Android Studio',
+        category: AppCategory.Editor,
+        exePatterns: ['bin/studio64.exe'],
+      },
+      Fleet: {
+        id: 'com.jetbrains.fleet',
+        name: 'Fleet',
+        category: AppCategory.Editor,
+        exePatterns: ['Fleet.exe'],
+      },
+
+      // VS Code family
+      'Visual Studio Code': {
+        id: 'com.microsoft.VSCode',
+        name: 'VS Code',
+        category: AppCategory.Editor,
+        exePatterns: ['Code.exe'],
+      },
+      'Microsoft Visual Studio Code': {
+        id: 'com.microsoft.VSCode',
+        name: 'VS Code',
+        category: AppCategory.Editor,
+        exePatterns: ['Code.exe'],
+      },
+      VSCodium: {
+        id: 'com.vscodium.codium',
+        name: 'VSCodium',
+        category: AppCategory.Editor,
+        exePatterns: ['VSCodium.exe'],
+      },
+      Cursor: {
+        id: 'com.todesktop.230313mzl4w4u92',
+        name: 'Cursor',
+        category: AppCategory.Editor,
+        exePatterns: ['Cursor.exe'],
+      },
+      Windsurf: {
+        id: 'com.exafunction.windsurf',
+        name: 'Windsurf',
+        category: AppCategory.Editor,
+        exePatterns: ['Windsurf.exe'],
+      },
+
+      // Other editors
+      Zed: {
+        id: 'dev.zed.Zed',
+        name: 'Zed',
+        category: AppCategory.Editor,
+        exePatterns: ['Zed.exe', 'zed.exe'],
+      },
+      'Sublime Text': {
+        id: 'com.sublimetext.4',
+        name: 'Sublime Text',
+        category: AppCategory.Editor,
+        exePatterns: ['sublime_text.exe'],
+      },
+      'Notepad++': {
+        id: 'notepad++',
+        name: 'Notepad++',
+        category: AppCategory.Editor,
+        exePatterns: ['notepad++.exe'],
+      },
+
+      // Terminals
+      WezTerm: {
+        id: 'org.wezfurlong.wezterm',
+        name: 'WezTerm',
+        category: AppCategory.Terminal,
+        exePatterns: ['wezterm-gui.exe'],
+      },
+      Alacritty: {
+        id: 'org.alacritty',
+        name: 'Alacritty',
+        category: AppCategory.Terminal,
+        exePatterns: ['alacritty.exe'],
+      },
+      Hyper: {
+        id: 'co.zeit.hyper',
+        name: 'Hyper',
+        category: AppCategory.Terminal,
+        exePatterns: ['Hyper.exe'],
+      },
+      Tabby: {
+        id: 'org.tabby',
+        name: 'Tabby',
+        category: AppCategory.Terminal,
+        exePatterns: ['Tabby.exe'],
+      },
+
+      // Git (for Git Bash)
+      'Git version': {
+        id: 'git.bash',
+        name: 'Git Bash',
+        category: AppCategory.Terminal,
+        exePatterns: ['git-bash.exe'],
+      },
+      'GitHub Desktop': {
+        id: 'com.github.GitHubClient',
+        name: 'GitHub Desktop',
+        category: AppCategory.Editor,
+        exePatterns: ['GitHubDesktop.exe'],
+      },
     };
 
     // Query registry with /s to get all subkeys in one call (much faster)
@@ -139,15 +296,15 @@ export class AppDetector {
 
           const displayName = displayNameMatch[1].trim();
 
-          // Check if it's a JetBrains product
-          for (const [productName, productInfo] of Object.entries(jetbrainsProducts)) {
-            if (displayName.includes(productName)) {
+          // Check against all app patterns
+          for (const [pattern, appInfo] of Object.entries(appPatterns)) {
+            if (displayName.includes(pattern) && !detectedIds.has(appInfo.id)) {
               const installLocationMatch = entry.match(/InstallLocation\s+REG_SZ\s+(.+)/);
               const displayIconMatch = entry.match(/DisplayIcon\s+REG_SZ\s+(.+)/);
 
               let exePath = '';
 
-              // Try DisplayIcon first (most reliable for JetBrains)
+              // Try DisplayIcon first (most reliable)
               if (displayIconMatch) {
                 const iconPath = displayIconMatch[1].trim().split(',')[0].replace(/"/g, '');
                 if (iconPath.endsWith('.exe') && existsSync(iconPath)) {
@@ -155,24 +312,11 @@ export class AppDetector {
                 }
               }
 
-              // Fallback to InstallLocation
-              if (!exePath && installLocationMatch) {
+              // Fallback to InstallLocation with exe patterns
+              if (!exePath && installLocationMatch && appInfo.exePatterns) {
                 const installLocation = installLocationMatch[1].trim();
-                const exeNames = [
-                  'idea64.exe',
-                  'webstorm64.exe',
-                  'pycharm64.exe',
-                  'goland64.exe',
-                  'clion64.exe',
-                  'rustrover64.exe',
-                  'rider64.exe',
-                  'phpstorm64.exe',
-                  'datagrip64.exe',
-                  'studio64.exe',
-                  'fleet.exe',
-                ];
-                for (const exeName of exeNames) {
-                  const testPath = join(installLocation, 'bin', exeName);
+                for (const exePattern of appInfo.exePatterns) {
+                  const testPath = join(installLocation, exePattern);
                   if (existsSync(testPath)) {
                     exePath = testPath;
                     break;
@@ -182,11 +326,12 @@ export class AppDetector {
 
               if (exePath) {
                 detected.push({
-                  name: productName,
-                  bundleId: productInfo.id,
-                  category: productInfo.category,
+                  name: appInfo.name,
+                  bundleId: appInfo.id,
+                  category: appInfo.category,
                   path: exePath,
                 });
+                detectedIds.add(appInfo.id);
               }
               break;
             }

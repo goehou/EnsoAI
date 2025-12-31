@@ -103,7 +103,7 @@ export function GeneralSettings() {
   const enterDelayOptions = React.useMemo(
     () => [
       { value: 0, label: t('Disabled') },
-      ...[1, 2, 3, 5].map((value) => ({
+      ...[1, 2, 3, 5, 10].map((value) => ({
         value,
         label: t('{{count}} seconds', { count: value }),
       })),

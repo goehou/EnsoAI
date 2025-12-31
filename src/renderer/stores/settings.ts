@@ -485,8 +485,8 @@ export const useSettingsStore = create<SettingsState>()(
         shellType: window.electronAPI?.env.platform === 'win32' ? 'powershell7' : 'system',
       },
       agentNotificationEnabled: true,
-      agentNotificationDelay: 3, // 3 seconds
-      agentNotificationEnterDelay: 0, // 0 = disabled, start timer immediately
+      agentNotificationDelay: 5, // 5 seconds
+      agentNotificationEnterDelay: 5, // 5 seconds delay after Enter before starting idle timer
       claudeCodeIntegration: defaultClaudeCodeIntegrationSettings,
       commitMessageGenerator: defaultCommitMessageGeneratorSettings,
       codeReview: defaultCodeReviewSettings,

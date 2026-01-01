@@ -8,15 +8,21 @@ import { TerminalSearchBar, type TerminalSearchBarRef } from './TerminalSearchBa
 interface ShellTerminalProps {
   cwd?: string;
   isActive?: boolean;
+  canMerge?: boolean; // whether merge option should be enabled (has multiple groups)
   onExit?: () => void;
   onTitleChange?: (title: string) => void;
+  onSplit?: () => void;
+  onMerge?: () => void;
 }
 
 export function ShellTerminal({
   cwd,
   isActive = false,
+  canMerge = false,
   onExit,
   onTitleChange,
+  onSplit,
+  onMerge,
 }: ShellTerminalProps) {
   const { t } = useI18n();
 
@@ -70,6 +76,9 @@ export function ShellTerminal({
       e.preventDefault();
 
       const selectedId = await window.electronAPI.contextMenu.show([
+        { id: 'split', label: t('Split Terminal') },
+        { id: 'merge', label: t('Merge Terminal'), disabled: !canMerge },
+        { id: 'separator-0', label: '', type: 'separator' },
         { id: 'clear', label: t('Clear terminal') },
         { id: 'refresh', label: t('Refresh terminal') },
         { id: 'separator-1', label: '', type: 'separator' },
@@ -81,6 +90,12 @@ export function ShellTerminal({
       if (!selectedId) return;
 
       switch (selectedId) {
+        case 'split':
+          onSplit?.();
+          break;
+        case 'merge':
+          onMerge?.();
+          break;
         case 'clear':
           clear();
           break;
@@ -103,7 +118,7 @@ export function ShellTerminal({
           break;
       }
     },
-    [terminal, clear, refreshRenderer, t]
+    [terminal, clear, refreshRenderer, t, onSplit, onMerge, canMerge]
   );
 
   useEffect(() => {
@@ -114,11 +129,11 @@ export function ShellTerminal({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !isActive) return;
+    if (!container) return;
 
     container.addEventListener('contextmenu', handleContextMenu);
     return () => container.removeEventListener('contextmenu', handleContextMenu);
-  }, [isActive, handleContextMenu, containerRef]);
+  }, [handleContextMenu, containerRef]);
 
   return (
     <div

@@ -17,10 +17,14 @@ interface AgentTerminalProps {
   initialized?: boolean;
   activated?: boolean;
   isActive?: boolean;
+  canMerge?: boolean; // whether merge option should be enabled (has multiple groups)
   onInitialized?: () => void;
   onActivated?: () => void;
   onExit?: () => void;
   onTerminalTitleChange?: (title: string) => void;
+  onSplit?: () => void;
+  onMerge?: () => void;
+  onFocus?: () => void; // called when terminal is clicked/focused to activate the group
 }
 
 const MIN_RUNTIME_FOR_AUTO_CLOSE = 10000; // 10 seconds
@@ -36,10 +40,14 @@ export function AgentTerminal({
   initialized,
   activated,
   isActive = false,
+  canMerge = false,
   onInitialized,
   onActivated,
   onExit,
   onTerminalTitleChange,
+  onSplit,
+  onMerge,
+  onFocus,
 }: AgentTerminalProps) {
   const { t } = useI18n();
   const {
@@ -427,19 +435,31 @@ export function AgentTerminal({
   const handleContextMenu = useCallback(
     async (e: MouseEvent) => {
       e.preventDefault();
+      onFocus?.();
 
-      const selectedId = await window.electronAPI.contextMenu.show([
+      const menuItems = [
+        { id: 'split', label: t('Split Agent') },
+        ...(canMerge ? [{ id: 'merge', label: t('Merge Agent') }] : []),
+        { id: 'separator-0', label: '', type: 'separator' as const },
         { id: 'clear', label: t('Clear terminal') },
         { id: 'refresh', label: t('Refresh terminal') },
-        { id: 'separator-1', label: '', type: 'separator' },
+        { id: 'separator-1', label: '', type: 'separator' as const },
         { id: 'copy', label: t('Copy'), disabled: !terminal?.hasSelection() },
         { id: 'paste', label: t('Paste') },
         { id: 'selectAll', label: t('Select all') },
-      ]);
+      ];
+
+      const selectedId = await window.electronAPI.contextMenu.show(menuItems);
 
       if (!selectedId) return;
 
       switch (selectedId) {
+        case 'split':
+          onSplit?.();
+          break;
+        case 'merge':
+          onMerge?.();
+          break;
         case 'clear':
           clear();
           break;
@@ -462,7 +482,7 @@ export function AgentTerminal({
           break;
       }
     },
-    [terminal, clear, refreshRenderer, t]
+    [terminal, clear, refreshRenderer, t, onSplit, canMerge, onMerge, onFocus]
   );
 
   useEffect(() => {
@@ -473,11 +493,11 @@ export function AgentTerminal({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !isActive) return;
+    if (!container) return;
 
     container.addEventListener('contextmenu', handleContextMenu);
     return () => container.removeEventListener('contextmenu', handleContextMenu);
-  }, [isActive, handleContextMenu, containerRef]);
+  }, [handleContextMenu, containerRef]);
 
   // Cleanup idle timer on unmount
   useEffect(() => {
@@ -488,10 +508,19 @@ export function AgentTerminal({
     };
   }, []);
 
+  // Handle click to activate group
+  const handleClick = useCallback(() => {
+    if (!isActive) {
+      onFocus?.();
+    }
+  }, [isActive, onFocus]);
+
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: click is for focus activation
     <div
       className="relative h-full w-full"
       style={{ backgroundColor: settings.theme.background, contain: 'strict' }}
+      onClick={handleClick}
     >
       <div ref={containerRef} className="h-full w-full px-[5px] py-[2px]" />
       <TerminalSearchBar

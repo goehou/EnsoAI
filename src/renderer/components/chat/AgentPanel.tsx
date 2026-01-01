@@ -1,6 +1,7 @@
 import { Plus, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { normalizePath, pathsEqual } from '@/App/storage';
+import { ResizeHandle } from '@/components/terminal/ResizeHandle';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { matchesKeybinding } from '@/lib/keybinding';
@@ -8,8 +9,11 @@ import { useAgentSessionsStore } from '@/stores/agentSessions';
 import { useCodeReviewContinueStore } from '@/stores/codeReviewContinue';
 import { BUILTIN_AGENT_IDS, useSettingsStore } from '@/stores/settings';
 import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
+import { AgentGroup } from './AgentGroup';
 import { AgentTerminal } from './AgentTerminal';
-import { type Session, SessionBar } from './SessionBar';
+import type { Session } from './SessionBar';
+import type { AgentGroupState, AgentGroup as AgentGroupType } from './types';
+import { createInitialGroupState } from './types';
 
 interface AgentPanelProps {
   repoPath: string; // repository path (workspace identifier)
@@ -102,29 +106,39 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   const defaultAgentId = useMemo(() => getDefaultAgentId(agentSettings), [agentSettings]);
   const { setAgentCount, registerAgentCloseHandler } = useWorktreeActivityStore();
 
-  // Use zustand store for sessions - state persists even when component unmounts
+  // Global session IDs to keep terminals mounted across group moves
+  const [globalSessionIds, setGlobalSessionIds] = useState<Set<string>>(new Set());
+
+  // Use zustand store for sessions and group states - state persists even when component unmounts
   const allSessions = useAgentSessionsStore((state) => state.sessions);
-  const activeIds = useAgentSessionsStore((state) => state.activeIds);
   const addSession = useAgentSessionsStore((state) => state.addSession);
   const removeSession = useAgentSessionsStore((state) => state.removeSession);
   const updateSession = useAgentSessionsStore((state) => state.updateSession);
   const setActiveId = useAgentSessionsStore((state) => state.setActiveId);
-  const reorderSessions = useAgentSessionsStore((state) => state.reorderSessions);
 
-  // Get current worktree's active session id (fallback to first session if not set)
-  const activeSessionId = useMemo(() => {
-    const activeId = activeIds[normalizePath(cwd)];
-    if (activeId) {
-      // Verify the session exists and matches repoPath
-      const session = allSessions.find((s) => s.id === activeId);
-      if (session && session.repoPath === repoPath) {
-        return activeId;
-      }
-    }
-    // Fallback to first session for this repo+cwd
-    const firstSession = allSessions.find((s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd));
-    return firstSession?.id || null;
-  }, [activeIds, allSessions, repoPath, cwd]);
+  // Group states from store (persists across component remounts)
+  const worktreeGroupStates = useAgentSessionsStore((state) => state.groupStates);
+  const setGroupState = useAgentSessionsStore((state) => state.setGroupState);
+  const updateGroupState = useAgentSessionsStore((state) => state.updateGroupState);
+  const removeGroupState = useAgentSessionsStore((state) => state.removeGroupState);
+
+  // Get current worktree's group state
+  const currentGroupState = useMemo(() => {
+    if (!cwd) return createInitialGroupState();
+    const normalizedCwd = normalizePath(cwd);
+    return worktreeGroupStates[normalizedCwd] || createInitialGroupState();
+  }, [cwd, worktreeGroupStates]);
+
+  const { groups, activeGroupId } = currentGroupState;
+
+  // Update group state helper - uses store instead of local state
+  const updateCurrentGroupState = useCallback(
+    (updater: (state: AgentGroupState) => AgentGroupState) => {
+      if (!cwd) return;
+      updateGroupState(cwd, updater);
+    },
+    [cwd, updateGroupState]
+  );
 
   // Filter sessions for current repo+worktree (for SessionBar display, sorted by displayOrder)
   const currentWorktreeSessions = useMemo(() => {
@@ -203,53 +217,150 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         removeSession(session.id);
       }
 
+      // Remove group state for this worktree
+      removeGroupState(worktreePath);
+
       // Set count to 0
       setAgentCount(worktreePath, 0);
     };
 
     return registerAgentCloseHandler(handleCloseAll);
-  }, [registerAgentCloseHandler, setAgentCount, allSessions, removeSession]);
+  }, [registerAgentCloseHandler, setAgentCount, allSessions, removeSession, removeGroupState]);
 
-  const handleNewSession = useCallback(() => {
-    const newSession = createSession(repoPath, cwd, defaultAgentId, customAgents, agentSettings);
-    addSession(newSession);
-  }, [repoPath, cwd, defaultAgentId, customAgents, agentSettings, addSession]);
+  // Handle new session in active group
+  const handleNewSession = useCallback(
+    (targetGroupId?: string) => {
+      const newSession = createSession(repoPath, cwd, defaultAgentId, customAgents, agentSettings);
+      addSession(newSession);
 
-  const handleCloseSession = useCallback(
-    (id: string) => {
-      const session = allSessions.find((s) => s.id === id);
-      if (!session) return;
+      // Add session to group
+      updateCurrentGroupState((state) => {
+        const groupId = targetGroupId || state.activeGroupId || state.groups[0]?.id;
+        if (!groupId) {
+          // No groups exist - create first group with this session
+          const newGroup: AgentGroupType = {
+            id: crypto.randomUUID(),
+            sessionIds: [newSession.id],
+            activeSessionId: newSession.id,
+          };
+          return {
+            groups: [newGroup],
+            activeGroupId: newGroup.id,
+            flexPercents: [100],
+          };
+        }
 
-      const sessionRepoPath = session.repoPath;
-      const worktreeCwd = session.cwd;
-
-      // Remove the session
-      removeSession(id);
-
-      // Check remaining sessions for this worktree
-      const remainingInWorktree = allSessions.filter(
-        (s) => s.id !== id && s.repoPath === sessionRepoPath && pathsEqual(s.cwd, worktreeCwd)
-      );
-
-      // If closing active session, switch to another if available
-      if (activeIds[normalizePath(worktreeCwd)] === id && remainingInWorktree.length > 0) {
-        const closedIndex = allSessions
-          .filter((s) => s.repoPath === sessionRepoPath && pathsEqual(s.cwd, worktreeCwd))
-          .findIndex((s) => s.id === id);
-        const newActiveIndex = Math.min(closedIndex, remainingInWorktree.length - 1);
-        setActiveId(worktreeCwd, remainingInWorktree[newActiveIndex].id);
-      }
+        return {
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  sessionIds: [...g.sessionIds, newSession.id],
+                  activeSessionId: newSession.id,
+                }
+              : g
+          ),
+        };
+      });
     },
-    [allSessions, activeIds, removeSession, setActiveId]
+    [
+      repoPath,
+      cwd,
+      defaultAgentId,
+      customAgents,
+      agentSettings,
+      addSession,
+      updateCurrentGroupState,
+    ]
   );
 
-  const handleSelectSession = useCallback(
-    (id: string) => {
+  // Handle close session
+  const handleCloseSession = useCallback(
+    (id: string, groupId?: string) => {
       const session = allSessions.find((s) => s.id === id);
       if (!session) return;
-      setActiveId(session.cwd, id);
+
+      // Remove the session from Zustand store
+      removeSession(id);
+
+      // Update group state
+      updateCurrentGroupState((state) => {
+        const targetGroupId = groupId || state.groups.find((g) => g.sessionIds.includes(id))?.id;
+        if (!targetGroupId) return state;
+
+        const group = state.groups.find((g) => g.id === targetGroupId);
+        if (!group) return state;
+
+        const newSessionIds = group.sessionIds.filter((sid) => sid !== id);
+
+        // If group becomes empty, remove the group
+        if (newSessionIds.length === 0) {
+          const newGroups = state.groups.filter((g) => g.id !== targetGroupId);
+
+          if (newGroups.length === 0) {
+            // All groups empty - reset state
+            return createInitialGroupState();
+          }
+
+          // Recalculate flex percentages
+          const newFlexPercents = newGroups.map(() => 100 / newGroups.length);
+
+          // Update active group if needed
+          let newActiveGroupId = state.activeGroupId;
+          if (state.activeGroupId === targetGroupId) {
+            const removedIndex = state.groups.findIndex((g) => g.id === targetGroupId);
+            const newIndex = Math.min(removedIndex, newGroups.length - 1);
+            newActiveGroupId = newGroups[newIndex]?.id || null;
+          }
+
+          return {
+            groups: newGroups,
+            activeGroupId: newActiveGroupId,
+            flexPercents: newFlexPercents,
+          };
+        }
+
+        // Update active session in group if needed
+        let newActiveSessionId = group.activeSessionId;
+        if (group.activeSessionId === id) {
+          const closedIndex = group.sessionIds.indexOf(id);
+          const newIndex = Math.min(closedIndex, newSessionIds.length - 1);
+          newActiveSessionId = newSessionIds[newIndex];
+        }
+
+        return {
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === targetGroupId
+              ? { ...g, sessionIds: newSessionIds, activeSessionId: newActiveSessionId }
+              : g
+          ),
+        };
+      });
     },
-    [allSessions, setActiveId]
+    [allSessions, removeSession, updateCurrentGroupState]
+  );
+
+  // Handle session selection
+  const handleSelectSession = useCallback(
+    (id: string, groupId?: string) => {
+      setActiveId(cwd, id);
+
+      updateCurrentGroupState((state) => {
+        const targetGroupId = groupId || state.groups.find((g) => g.sessionIds.includes(id))?.id;
+        if (!targetGroupId) return state;
+
+        return {
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === targetGroupId ? { ...g, activeSessionId: id } : g
+          ),
+          activeGroupId: targetGroupId,
+        };
+      });
+    },
+    [cwd, setActiveId, updateCurrentGroupState]
   );
 
   // 监听通知点击，激活对应 session 并切换 worktree
@@ -301,25 +412,74 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         environment: 'native',
       };
       addSession(newSession);
+
+      // Add to active group or create new group
+      updateCurrentGroupState((state) => {
+        const groupId = state.activeGroupId || state.groups[0]?.id;
+        if (!groupId) {
+          const newGroup: AgentGroupType = {
+            id: crypto.randomUUID(),
+            sessionIds: [pendingSessionId],
+            activeSessionId: pendingSessionId,
+          };
+          return {
+            groups: [newGroup],
+            activeGroupId: newGroup.id,
+            flexPercents: [100],
+          };
+        }
+
+        return {
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  sessionIds: [...g.sessionIds, pendingSessionId],
+                  activeSessionId: pendingSessionId,
+                }
+              : g
+          ),
+        };
+      });
+
       clearContinueRequest();
     }
-  }, [pendingSessionId, cwd, repoPath, addSession, clearContinueRequest]);
+  }, [pendingSessionId, cwd, repoPath, addSession, updateCurrentGroupState, clearContinueRequest]);
 
   const handleNextSession = useCallback(() => {
-    const sessions = allSessions.filter((s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd));
-    if (sessions.length <= 1) return;
-    const currentIndex = sessions.findIndex((s) => s.id === activeIds[normalizePath(cwd)]);
-    const nextIndex = (currentIndex + 1) % sessions.length;
-    setActiveId(cwd, sessions[nextIndex].id);
-  }, [allSessions, repoPath, cwd, activeIds, setActiveId]);
+    const activeGroup = groups.find((g) => g.id === activeGroupId);
+    if (!activeGroup || activeGroup.sessionIds.length <= 1) return;
+
+    const currentIndex = activeGroup.sessionIds.indexOf(activeGroup.activeSessionId || '');
+    const nextIndex = (currentIndex + 1) % activeGroup.sessionIds.length;
+    const nextSessionId = activeGroup.sessionIds[nextIndex];
+
+    setActiveId(cwd, nextSessionId);
+    updateCurrentGroupState((state) => ({
+      ...state,
+      groups: state.groups.map((g) =>
+        g.id === activeGroupId ? { ...g, activeSessionId: nextSessionId } : g
+      ),
+    }));
+  }, [groups, activeGroupId, cwd, setActiveId, updateCurrentGroupState]);
 
   const handlePrevSession = useCallback(() => {
-    const sessions = allSessions.filter((s) => s.repoPath === repoPath && pathsEqual(s.cwd, cwd));
-    if (sessions.length <= 1) return;
-    const currentIndex = sessions.findIndex((s) => s.id === activeIds[normalizePath(cwd)]);
-    const prevIndex = currentIndex <= 0 ? sessions.length - 1 : currentIndex - 1;
-    setActiveId(cwd, sessions[prevIndex].id);
-  }, [allSessions, repoPath, cwd, activeIds, setActiveId]);
+    const activeGroup = groups.find((g) => g.id === activeGroupId);
+    if (!activeGroup || activeGroup.sessionIds.length <= 1) return;
+
+    const currentIndex = activeGroup.sessionIds.indexOf(activeGroup.activeSessionId || '');
+    const prevIndex = currentIndex <= 0 ? activeGroup.sessionIds.length - 1 : currentIndex - 1;
+    const prevSessionId = activeGroup.sessionIds[prevIndex];
+
+    setActiveId(cwd, prevSessionId);
+    updateCurrentGroupState((state) => ({
+      ...state,
+      groups: state.groups.map((g) =>
+        g.id === activeGroupId ? { ...g, activeSessionId: prevSessionId } : g
+      ),
+    }));
+  }, [groups, activeGroupId, cwd, setActiveId, updateCurrentGroupState]);
 
   const handleInitialized = useCallback(
     (id: string) => {
@@ -343,14 +503,23 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
   );
 
   const handleReorderSessions = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      reorderSessions(repoPath, cwd, fromIndex, toIndex);
+    (groupId: string, fromIndex: number, toIndex: number) => {
+      updateCurrentGroupState((state) => ({
+        ...state,
+        groups: state.groups.map((g) => {
+          if (g.id !== groupId) return g;
+          const newSessionIds = [...g.sessionIds];
+          const [removed] = newSessionIds.splice(fromIndex, 1);
+          newSessionIds.splice(toIndex, 0, removed);
+          return { ...g, sessionIds: newSessionIds };
+        }),
+      }));
     },
-    [reorderSessions, repoPath, cwd]
+    [updateCurrentGroupState]
   );
 
   const handleNewSessionWithAgent = useCallback(
-    (agentId: string, agentCommand: string) => {
+    (agentId: string, agentCommand: string, targetGroupId?: string) => {
       // Handle Hapi and Happy agent IDs
       const isHapi = agentId.endsWith('-hapi');
       const isHappy = agentId.endsWith('-happy');
@@ -383,9 +552,291 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       };
 
       addSession(newSession);
+
+      // Add to target group or active group
+      updateCurrentGroupState((state) => {
+        const groupId = targetGroupId || state.activeGroupId || state.groups[0]?.id;
+        if (!groupId) {
+          const newGroup: AgentGroupType = {
+            id: crypto.randomUUID(),
+            sessionIds: [newSession.id],
+            activeSessionId: newSession.id,
+          };
+          return {
+            groups: [newGroup],
+            activeGroupId: newGroup.id,
+            flexPercents: [100],
+          };
+        }
+
+        return {
+          ...state,
+          groups: state.groups.map((g) =>
+            g.id === groupId
+              ? {
+                  ...g,
+                  sessionIds: [...g.sessionIds, newSession.id],
+                  activeSessionId: newSession.id,
+                }
+              : g
+          ),
+        };
+      });
     },
-    [repoPath, cwd, customAgents, agentSettings, addSession]
+    [repoPath, cwd, customAgents, agentSettings, addSession, updateCurrentGroupState]
   );
+
+  // Handle session terminal title change
+  const handleSessionTerminalTitleChange = useCallback(
+    (sessionId: string, title: string) => {
+      updateSession(sessionId, { terminalTitle: title });
+    },
+    [updateSession]
+  );
+
+  // Handle group click
+  const handleGroupClick = useCallback(
+    (groupId: string) => {
+      updateCurrentGroupState((state) => ({
+        ...state,
+        activeGroupId: groupId,
+      }));
+    },
+    [updateCurrentGroupState]
+  );
+
+  // Handle split - create new group to the right
+  // If source group has multiple sessions, move the active session to new group
+  // If source group has only 1 session, create a new session in new group
+  const handleSplit = useCallback(
+    (fromGroupId: string) => {
+      if (!cwd) return;
+
+      updateCurrentGroupState((state) => {
+        const fromIndex = state.groups.findIndex((g) => g.id === fromGroupId);
+        if (fromIndex === -1) return state;
+
+        const sourceGroup = state.groups[fromIndex];
+
+        // If source group has multiple sessions, move the active session to new group
+        if (sourceGroup.sessionIds.length > 1 && sourceGroup.activeSessionId) {
+          const sessionToMove = sourceGroup.activeSessionId;
+
+          // Remove session from source group
+          const newSourceSessionIds = sourceGroup.sessionIds.filter((id) => id !== sessionToMove);
+          const closedIndex = sourceGroup.sessionIds.indexOf(sessionToMove);
+          const newSourceActiveIndex = Math.min(closedIndex, newSourceSessionIds.length - 1);
+          const newSourceActiveSessionId = newSourceSessionIds[newSourceActiveIndex] || null;
+
+          // Create new group with the moved session
+          const newGroup: AgentGroupType = {
+            id: crypto.randomUUID(),
+            sessionIds: [sessionToMove],
+            activeSessionId: sessionToMove,
+          };
+
+          const newGroups = state.groups.map((g) =>
+            g.id === fromGroupId
+              ? { ...g, sessionIds: newSourceSessionIds, activeSessionId: newSourceActiveSessionId }
+              : g
+          );
+          newGroups.splice(fromIndex + 1, 0, newGroup);
+
+          // Recalculate flex percentages evenly
+          const newFlexPercents = newGroups.map(() => 100 / newGroups.length);
+
+          return {
+            ...state,
+            groups: newGroups,
+            activeGroupId: newGroup.id,
+            flexPercents: newFlexPercents,
+          };
+        }
+
+        // Source group has only 1 session, create a new session in new group
+        const newSession = createSession(
+          repoPath,
+          cwd,
+          defaultAgentId,
+          customAgents,
+          agentSettings
+        );
+        addSession(newSession);
+
+        const newGroup: AgentGroupType = {
+          id: crypto.randomUUID(),
+          sessionIds: [newSession.id],
+          activeSessionId: newSession.id,
+        };
+
+        const newGroups = [...state.groups];
+        newGroups.splice(fromIndex + 1, 0, newGroup);
+
+        // Recalculate flex percentages evenly
+        const newFlexPercents = newGroups.map(() => 100 / newGroups.length);
+
+        return {
+          ...state,
+          groups: newGroups,
+          activeGroupId: newGroup.id,
+          flexPercents: newFlexPercents,
+        };
+      });
+    },
+    [
+      cwd,
+      repoPath,
+      defaultAgentId,
+      customAgents,
+      agentSettings,
+      addSession,
+      updateCurrentGroupState,
+    ]
+  );
+
+  // Handle merge - move active session from current group to previous group
+  const handleMerge = useCallback(
+    (fromGroupId: string) => {
+      updateCurrentGroupState((state) => {
+        const fromIndex = state.groups.findIndex((g) => g.id === fromGroupId);
+        if (fromIndex <= 0) return state; // Can't merge first group
+
+        const fromGroup = state.groups[fromIndex];
+        const targetGroup = state.groups[fromIndex - 1];
+
+        if (!fromGroup.activeSessionId) return state;
+
+        const movingSessionId = fromGroup.activeSessionId;
+        const remainingSessionIds = fromGroup.sessionIds.filter((id) => id !== movingSessionId);
+
+        // If from group becomes empty, remove it
+        if (remainingSessionIds.length === 0) {
+          const newGroups = state.groups.filter((g) => g.id !== fromGroupId);
+          newGroups[fromIndex - 1] = {
+            ...targetGroup,
+            sessionIds: [...targetGroup.sessionIds, movingSessionId],
+            activeSessionId: movingSessionId,
+          };
+
+          const newFlexPercents = newGroups.map(() => 100 / newGroups.length);
+
+          return {
+            groups: newGroups,
+            activeGroupId: targetGroup.id,
+            flexPercents: newFlexPercents,
+          };
+        }
+
+        // From group still has sessions
+        const newActiveInFromGroup = remainingSessionIds[0] || null;
+        const newGroups = state.groups.map((g) => {
+          if (g.id === targetGroup.id) {
+            return {
+              ...g,
+              sessionIds: [...g.sessionIds, movingSessionId],
+              activeSessionId: movingSessionId,
+            };
+          }
+          if (g.id === fromGroupId) {
+            return {
+              ...g,
+              sessionIds: remainingSessionIds,
+              activeSessionId: newActiveInFromGroup,
+            };
+          }
+          return g;
+        });
+
+        return {
+          ...state,
+          groups: newGroups,
+          activeGroupId: targetGroup.id,
+        };
+      });
+    },
+    [updateCurrentGroupState]
+  );
+
+  // Handle resize between groups
+  const handleResize = useCallback(
+    (index: number, deltaPercent: number) => {
+      updateCurrentGroupState((state) => {
+        if (state.groups.length < 2) return state;
+
+        const newFlexPercents = [...state.flexPercents];
+        const minPercent = 20;
+
+        // Adjust the two adjacent groups
+        const leftNew = newFlexPercents[index] + deltaPercent;
+        const rightNew = newFlexPercents[index + 1] - deltaPercent;
+
+        // Clamp to minimum
+        if (leftNew >= minPercent && rightNew >= minPercent) {
+          newFlexPercents[index] = leftNew;
+          newFlexPercents[index + 1] = rightNew;
+        }
+
+        return {
+          ...state,
+          flexPercents: newFlexPercents,
+        };
+      });
+    },
+    [updateCurrentGroupState]
+  );
+
+  // Auto-create first group when panel becomes active and empty
+  useEffect(() => {
+    if (isActive && cwd && groups.length === 0 && currentWorktreeSessions.length === 0) {
+      // Create initial group with new session
+      handleNewSession();
+    }
+  }, [isActive, cwd, groups.length, currentWorktreeSessions.length, handleNewSession]);
+
+  // Sync sessions to groups on initial load or when sessions change externally
+  useEffect(() => {
+    if (!cwd || currentWorktreeSessions.length === 0) return;
+
+    const normalizedCwd = normalizePath(cwd);
+    const currentState = worktreeGroupStates[normalizedCwd];
+
+    // If no groups exist but sessions do, create a group with all sessions
+    if (!currentState || currentState.groups.length === 0) {
+      const sessionIds = currentWorktreeSessions.map((s) => s.id);
+      const newGroup: AgentGroupType = {
+        id: crypto.randomUUID(),
+        sessionIds,
+        activeSessionId: sessionIds[0] || null,
+      };
+      setGroupState(cwd, {
+        groups: [newGroup],
+        activeGroupId: newGroup.id,
+        flexPercents: [100],
+      });
+    }
+  }, [cwd, currentWorktreeSessions, worktreeGroupStates, setGroupState]);
+
+  // Maintain global session IDs - include ALL sessions across all repos
+  // This ensures terminals stay mounted when switching between repos
+  useEffect(() => {
+    const allSessionIds = allSessions.map((s) => s.id);
+    const allSessionIdSet = new Set(allSessionIds);
+
+    setGlobalSessionIds((prev) => {
+      const next = new Set(prev);
+      // Add new sessions
+      for (const id of allSessionIds) {
+        next.add(id);
+      }
+      // Remove sessions that no longer exist
+      for (const id of next) {
+        if (!allSessionIdSet.has(id)) {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+  }, [allSessions]);
 
   // Agent session keyboard shortcuts
   useEffect(() => {
@@ -402,8 +853,9 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
       // Close session
       if (matchesKeybinding(e, agentKeybindings.closeSession)) {
         e.preventDefault();
-        if (activeSessionId) {
-          handleCloseSession(activeSessionId);
+        const activeGroup = groups.find((g) => g.id === activeGroupId);
+        if (activeGroup?.activeSessionId) {
+          handleCloseSession(activeGroup.activeSessionId, activeGroup.id);
         }
         return;
       }
@@ -422,14 +874,16 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         return;
       }
 
-      // Bonus: Cmd/Win+1-9 to switch to specific session (if not intercepted by main tab)
+      // Bonus: Cmd/Win+1-9 to switch to specific session in active group
       if (e.metaKey && e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        const sessions = allSessions.filter((s) => s.repoPath === repoPath && s.cwd === cwd);
-        const index = Number.parseInt(e.key, 10) - 1;
-        if (index < sessions.length) {
-          e.preventDefault();
-          handleSelectSession(sessions[index].id);
-          return;
+        const activeGroup = groups.find((g) => g.id === activeGroupId);
+        if (activeGroup) {
+          const index = Number.parseInt(e.key, 10) - 1;
+          if (index < activeGroup.sessionIds.length) {
+            e.preventDefault();
+            handleSelectSession(activeGroup.sessionIds[index], activeGroup.id);
+            return;
+          }
         }
       }
     };
@@ -437,56 +891,52 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     isActive,
-    activeSessionId,
+    groups,
+    activeGroupId,
     agentKeybindings,
     handleNewSession,
     handleCloseSession,
     handleNextSession,
     handlePrevSession,
-    allSessions,
-    repoPath,
-    cwd,
     handleSelectSession,
   ]);
 
-  // Check if current worktree has no sessions
-  const hasNoCurrentSessions = currentWorktreeSessions.length === 0;
+  if (!cwd) return null;
 
-  return (
-    <div className="relative h-full w-full">
-      {/* Render all terminals across all repos/worktrees, keep them mounted */}
-      {/* Use opacity-0 instead of invisible to avoid WebGL rendering artifacts */}
-      {allSessions.map((session) => {
-        const isSessionActive =
-          session.repoPath === repoPath && session.cwd === cwd && activeSessionId === session.id;
-        return (
-          <div
-            key={session.id}
-            className={
-              isSessionActive ? 'h-full w-full' : 'absolute inset-0 opacity-0 pointer-events-none'
-            }
-          >
-            <AgentTerminal
-              cwd={session.cwd}
-              sessionId={session.id}
-              agentCommand={session.agentCommand || 'claude'}
-              customPath={session.customPath}
-              customArgs={session.customArgs}
-              environment={session.environment || 'native'}
-              initialized={session.initialized}
-              activated={session.activated}
-              isActive={isActive && isSessionActive}
-              onInitialized={() => handleInitialized(session.id)}
-              onActivated={() => handleActivated(session.id)}
-              onExit={() => handleCloseSession(session.id)}
-              onTerminalTitleChange={(title) => updateSession(session.id, { terminalTitle: title })}
-            />
-          </div>
-        );
-      })}
+  // Check if there are any groups
+  const hasAnyGroups = Object.keys(worktreeGroupStates).length > 0;
 
-      {/* Empty state overlay when current worktree has no sessions */}
-      {hasNoCurrentSessions && (
+  // Helper to find session info (which worktree, group, index)
+  const findSessionInfo = (sessionId: string) => {
+    for (const [worktreePath, state] of Object.entries(worktreeGroupStates)) {
+      for (let groupIndex = 0; groupIndex < state.groups.length; groupIndex++) {
+        const group = state.groups[groupIndex];
+        if (group.sessionIds.includes(sessionId)) {
+          const session = allSessions.find((s) => s.id === sessionId);
+          if (session) {
+            return { worktreePath, state, group, groupIndex, session };
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  // Calculate cumulative left positions for groups
+  const getGroupPositions = (state: AgentGroupState) => {
+    const positions: { left: number; width: number }[] = [];
+    let cumulative = 0;
+    for (const percent of state.flexPercents) {
+      positions.push({ left: cumulative, width: percent });
+      cumulative += percent;
+    }
+    return positions;
+  };
+
+  // If no groups and no sessions, show empty state
+  if (!hasAnyGroups && currentWorktreeSessions.length === 0) {
+    return (
+      <div className="relative h-full w-full">
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-muted-foreground bg-background">
           <Sparkles className="h-12 w-12 opacity-50" />
           <p className="text-sm">{t('No agent sessions')}</p>
@@ -551,21 +1001,146 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
             )}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Floating session bar - shows only current worktree's sessions */}
-      {!hasNoCurrentSessions && (
-        <SessionBar
-          sessions={currentWorktreeSessions}
-          activeSessionId={activeSessionId}
-          onSelectSession={handleSelectSession}
-          onCloseSession={handleCloseSession}
-          onNewSession={handleNewSession}
-          onNewSessionWithAgent={handleNewSessionWithAgent}
-          onRenameSession={handleRenameSession}
-          onReorderSessions={handleReorderSessions}
-        />
-      )}
+  // Get current worktree's group positions for terminal placement
+  const currentGroupPositions = getGroupPositions(currentGroupState);
+
+  return (
+    <div className="relative h-full w-full">
+      {/* Resize handles - only for current worktree */}
+      {currentGroupState.groups.length > 1 &&
+        currentGroupState.groups.map((group, index) => {
+          if (index >= currentGroupState.groups.length - 1) return null;
+          const leftPos = currentGroupPositions
+            .slice(0, index + 1)
+            .reduce((sum, p) => sum + p.width, 0);
+          return (
+            <ResizeHandle
+              key={`resize-${group.id}`}
+              style={{ left: `${leftPos}%` }}
+              onResize={(delta) => handleResize(index, delta)}
+            />
+          );
+        })}
+
+      {/* All terminals - rendered in a SINGLE container with stable sessionId keys */}
+      {/* This container is NOT inside any worktree-specific wrapper, ensuring stable mounting */}
+      {/* All sessions across ALL repos are rendered here to keep them mounted */}
+      <div className="absolute inset-0 z-0">
+        {Array.from(globalSessionIds).map((sessionId) => {
+          const session = allSessions.find((s) => s.id === sessionId);
+          if (!session) return null;
+
+          // Check if this session belongs to current repo
+          const isCurrentRepo = session.repoPath === repoPath;
+
+          // Find session's group info for positioning
+          const info = findSessionInfo(sessionId);
+
+          // Determine if this session belongs to current worktree
+          const isCurrentWorktree = isCurrentRepo && pathsEqual(session.cwd, cwd);
+
+          // Calculate position - if no group info, use full width
+          let left = 0;
+          let width = 100;
+          let isSessionVisible = true;
+          let groupId: string | null = null;
+
+          if (info) {
+            const positions = getGroupPositions(info.state);
+            const position = positions[info.groupIndex];
+            if (position) {
+              left = position.left;
+              width = position.width;
+            }
+            isSessionVisible = info.group.activeSessionId === sessionId;
+            groupId = info.group.id;
+          }
+
+          const isGroupActive = groupId === currentGroupState.activeGroupId;
+          const isTerminalActive =
+            isActive && isCurrentWorktree && isSessionVisible && isGroupActive;
+
+          // Only show terminals from current repo + current worktree + active session
+          const shouldShow = isCurrentRepo && isCurrentWorktree && isSessionVisible;
+
+          return (
+            <div
+              key={sessionId}
+              className={
+                shouldShow ? 'absolute h-full' : 'absolute h-full opacity-0 pointer-events-none'
+              }
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+              }}
+            >
+              {/* Inactive overlay - like TerminalGroup */}
+              {shouldShow && !isGroupActive && (
+                <div className="absolute inset-0 z-10 bg-background/10 pointer-events-none" />
+              )}
+              <AgentTerminal
+                cwd={session.cwd}
+                sessionId={session.id}
+                agentCommand={session.agentCommand || 'claude'}
+                customPath={session.customPath}
+                customArgs={session.customArgs}
+                environment={session.environment || 'native'}
+                initialized={session.initialized}
+                activated={session.activated}
+                isActive={isTerminalActive}
+                onInitialized={() => handleInitialized(sessionId)}
+                onActivated={() => handleActivated(sessionId)}
+                onExit={() => handleCloseSession(sessionId, groupId || undefined)}
+                onTerminalTitleChange={(title) => updateSession(sessionId, { terminalTitle: title })}
+                onSplit={() => groupId && handleSplit(groupId)}
+                canMerge={info ? info.groupIndex > 0 : false}
+                onMerge={() => groupId && handleMerge(groupId)}
+                onFocus={() => groupId && handleSelectSession(sessionId, groupId)}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Session bars (floating) - rendered for each group in current worktree */}
+      {/* pointer-events-none on container, AgentGroup handles its own pointer-events */}
+      {currentGroupState.groups.map((group, index) => {
+        const position = currentGroupPositions[index];
+        if (!position) return null;
+
+        return (
+          <div
+            key={`group-ui-${group.id}`}
+            className="absolute top-0 bottom-0 z-10 pointer-events-none overflow-hidden"
+            style={{
+              left: `${position.left}%`,
+              width: `${position.width}%`,
+            }}
+          >
+            <AgentGroup
+              group={group}
+              sessions={currentWorktreeSessions}
+              enabledAgents={enabledAgents}
+              customAgents={customAgents}
+              agentSettings={agentSettings}
+              agentInfo={AGENT_INFO}
+              onSessionSelect={(id) => handleSelectSession(id, group.id)}
+              onSessionClose={(id) => handleCloseSession(id, group.id)}
+              onSessionNew={() => handleNewSession(group.id)}
+              onSessionNewWithAgent={(agentId, cmd) =>
+                handleNewSessionWithAgent(agentId, cmd, group.id)
+              }
+              onSessionRename={handleRenameSession}
+              onSessionReorder={(from, to) => handleReorderSessions(group.id, from, to)}
+              onGroupClick={() => handleGroupClick(group.id)}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

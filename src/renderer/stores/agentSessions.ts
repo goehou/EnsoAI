@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { normalizePath, pathsEqual } from '@/App/storage';
 import type { Session } from '@/components/chat/SessionBar';
+import type { AgentGroupState } from '@/components/chat/types';
+import { createInitialGroupState } from '@/components/chat/types';
 
 // Global storage key for all sessions across all repos
 const SESSIONS_STORAGE_KEY = 'enso-agent-sessions';
@@ -9,9 +11,13 @@ const SESSIONS_STORAGE_KEY = 'enso-agent-sessions';
 // Agents that support session persistence
 const RESUMABLE_AGENTS = new Set(['claude']);
 
+// Group states indexed by normalized worktree path
+type WorktreeGroupStates = Record<string, AgentGroupState>;
+
 interface AgentSessionsState {
   sessions: Session[];
   activeIds: Record<string, string | null>; // key = cwd (worktree path)
+  groupStates: WorktreeGroupStates; // Group states per worktree (not persisted)
 
   // Actions
   addSession: (session: Session) => void;
@@ -21,6 +27,12 @@ interface AgentSessionsState {
   reorderSessions: (repoPath: string, cwd: string, fromIndex: number, toIndex: number) => void;
   getSessions: (repoPath: string, cwd: string) => Session[];
   getActiveSessionId: (repoPath: string, cwd: string) => string | null;
+
+  // Group state actions
+  getGroupState: (cwd: string) => AgentGroupState;
+  setGroupState: (cwd: string, state: AgentGroupState) => void;
+  updateGroupState: (cwd: string, updater: (state: AgentGroupState) => AgentGroupState) => void;
+  removeGroupState: (cwd: string) => void;
 }
 
 function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, string | null> } {
@@ -66,6 +78,7 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
   subscribeWithSelector((set, get) => ({
     sessions: initialState.sessions,
     activeIds: initialState.activeIds,
+    groupStates: {}, // Not persisted - will be recreated from sessions on mount
 
     addSession: (session) =>
       set((state) => {
@@ -157,6 +170,34 @@ export const useAgentSessionsStore = create<AgentSessionsState>()(
       );
       return firstSession?.id || null;
     },
+
+    // Group state actions
+    getGroupState: (cwd) => {
+      const normalized = normalizePath(cwd);
+      return get().groupStates[normalized] || createInitialGroupState();
+    },
+
+    setGroupState: (cwd, state) =>
+      set((prev) => ({
+        groupStates: { ...prev.groupStates, [normalizePath(cwd)]: state },
+      })),
+
+    updateGroupState: (cwd, updater) =>
+      set((prev) => {
+        const normalized = normalizePath(cwd);
+        const currentState = prev.groupStates[normalized] || createInitialGroupState();
+        return {
+          groupStates: { ...prev.groupStates, [normalized]: updater(currentState) },
+        };
+      }),
+
+    removeGroupState: (cwd) =>
+      set((prev) => {
+        const normalized = normalizePath(cwd);
+        const newStates = { ...prev.groupStates };
+        delete newStates[normalized];
+        return { groupStates: newStates };
+      }),
   }))
 );
 

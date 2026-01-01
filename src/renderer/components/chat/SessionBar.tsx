@@ -330,7 +330,7 @@ export function SessionBar({
   );
 
   return (
-    <div ref={containerRef} className="absolute inset-0 pointer-events-none z-10">
+    <div ref={containerRef} className="absolute inset-0 pointer-events-none">
       <div
         ref={barRef}
         onClick={state.collapsed ? handleExpand : undefined}

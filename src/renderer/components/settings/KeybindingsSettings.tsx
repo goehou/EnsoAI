@@ -6,7 +6,6 @@ import { codeToKey } from '@/lib/keybinding';
 import { cn } from '@/lib/utils';
 import { type TerminalKeybinding, useSettingsStore } from '@/stores/settings';
 
-// KeybindingInput component for capturing keyboard shortcuts
 export function KeybindingInput({
   value,
   onChange,
@@ -33,18 +32,14 @@ export function KeybindingInput({
     e.preventDefault();
     e.stopPropagation();
 
-    // Ignore modifier-only keys
     if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
 
-    // Use e.code to get the physical key (avoids Option key special chars on macOS)
     const key = codeToKey(e.code) || e.key.toLowerCase();
 
-    // Record exactly what the user pressed
     const newBinding: TerminalKeybinding = {
       key,
     };
 
-    // Only set modifier keys if they are actually pressed
     if (e.ctrlKey && !e.metaKey) newBinding.ctrl = true;
     if (e.altKey) newBinding.alt = true;
     if (e.shiftKey) newBinding.shift = true;
@@ -96,15 +91,12 @@ export function KeybindingInput({
   );
 }
 
-// Keybindings Settings Component
 export function KeybindingsSettings() {
   const {
-    terminalKeybindings,
-    setTerminalKeybindings,
+    xtermKeybindings,
+    setXtermKeybindings,
     mainTabKeybindings,
     setMainTabKeybindings,
-    agentKeybindings,
-    setAgentKeybindings,
     sourceControlKeybindings,
     setSourceControlKeybindings,
     searchKeybindings,
@@ -192,124 +184,73 @@ export function KeybindingsSettings() {
         </div>
       </div>
 
-      {/* Agent Session Management */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-medium">{t('Agent sessions')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('Agent session shortcuts')}</p>
-        <div className="space-y-3">
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('New Session')}</span>
-            <KeybindingInput
-              value={agentKeybindings.newSession}
-              onChange={(binding) => {
-                setAgentKeybindings({
-                  ...agentKeybindings,
-                  newSession: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Close Session')}</span>
-            <KeybindingInput
-              value={agentKeybindings.closeSession}
-              onChange={(binding) => {
-                setAgentKeybindings({
-                  ...agentKeybindings,
-                  closeSession: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Next Session')}</span>
-            <KeybindingInput
-              value={agentKeybindings.nextSession}
-              onChange={(binding) => {
-                setAgentKeybindings({
-                  ...agentKeybindings,
-                  nextSession: binding,
-                });
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
-            <span className="text-sm">{t('Previous Session')}</span>
-            <KeybindingInput
-              value={agentKeybindings.prevSession}
-              onChange={(binding) => {
-                setAgentKeybindings({
-                  ...agentKeybindings,
-                  prevSession: binding,
-                });
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Terminal Shortcuts */}
+      {/* Terminal (unified xterm keybindings) */}
       <div className="border-t pt-6">
         <h3 className="text-lg font-medium">{t('Terminal')}</h3>
-        <p className="text-sm text-muted-foreground mb-4">{t('Terminal shortcuts')}</p>
+        <p className="text-sm text-muted-foreground mb-4">
+          {t('Shortcuts for terminal and agent sessions')}
+        </p>
         <div className="space-y-3">
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <span className="text-sm">{t('New Tab')}</span>
             <KeybindingInput
-              value={terminalKeybindings.newTab}
+              value={xtermKeybindings.newTab}
               onChange={(binding) => {
-                setTerminalKeybindings({
-                  ...terminalKeybindings,
-                  newTab: binding,
-                });
+                setXtermKeybindings({ ...xtermKeybindings, newTab: binding });
               }}
             />
           </div>
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <span className="text-sm">{t('Close Tab')}</span>
             <KeybindingInput
-              value={terminalKeybindings.closeTab}
+              value={xtermKeybindings.closeTab}
               onChange={(binding) => {
-                setTerminalKeybindings({
-                  ...terminalKeybindings,
-                  closeTab: binding,
-                });
+                setXtermKeybindings({ ...xtermKeybindings, closeTab: binding });
               }}
             />
           </div>
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <span className="text-sm">{t('Next Tab')}</span>
             <KeybindingInput
-              value={terminalKeybindings.nextTab}
+              value={xtermKeybindings.nextTab}
               onChange={(binding) => {
-                setTerminalKeybindings({
-                  ...terminalKeybindings,
-                  nextTab: binding,
-                });
+                setXtermKeybindings({ ...xtermKeybindings, nextTab: binding });
               }}
             />
           </div>
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <span className="text-sm">{t('Previous Tab')}</span>
             <KeybindingInput
-              value={terminalKeybindings.prevTab}
+              value={xtermKeybindings.prevTab}
               onChange={(binding) => {
-                setTerminalKeybindings({
-                  ...terminalKeybindings,
-                  prevTab: binding,
-                });
+                setXtermKeybindings({ ...xtermKeybindings, prevTab: binding });
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+            <span className="text-sm">{t('Split pane')}</span>
+            <KeybindingInput
+              value={xtermKeybindings.split}
+              onChange={(binding) => {
+                setXtermKeybindings({ ...xtermKeybindings, split: binding });
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-[120px_1fr] items-center gap-4">
+            <span className="text-sm">{t('Merge pane')}</span>
+            <KeybindingInput
+              value={xtermKeybindings.merge}
+              onChange={(binding) => {
+                setXtermKeybindings({ ...xtermKeybindings, merge: binding });
               }}
             />
           </div>
           <div className="grid grid-cols-[120px_1fr] items-center gap-4">
             <span className="text-sm">{t('Clear terminal')}</span>
             <KeybindingInput
-              value={terminalKeybindings.clear}
+              value={xtermKeybindings.clear}
               onChange={(binding) => {
-                setTerminalKeybindings({
-                  ...terminalKeybindings,
-                  clear: binding,
-                });
+                setXtermKeybindings({ ...xtermKeybindings, clear: binding });
               }}
             />
           </div>

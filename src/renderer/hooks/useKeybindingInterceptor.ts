@@ -2,34 +2,25 @@ import { useEffect } from 'react';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { useSettingsStore } from '@/stores/settings';
 
-type KeybindingType = 'closeTab' | 'newTab' | 'nextTab' | 'prevTab' | 'clear';
+type KeybindingType = 'closeTab' | 'newTab' | 'nextTab' | 'prevTab' | 'clear' | 'split' | 'merge';
 
-/**
- * Intercept terminal keybindings when a condition is met.
- * Useful for dialogs/modals that need to capture close shortcuts.
- *
- * @param isActive - Whether to intercept keybindings
- * @param keybinding - Which keybinding to intercept
- * @param onMatch - Callback when the keybinding is pressed
- */
 export function useKeybindingInterceptor(
   isActive: boolean,
   keybinding: KeybindingType,
   onMatch: () => void
 ) {
-  const terminalKeybindings = useSettingsStore((s) => s.terminalKeybindings);
+  const xtermKeybindings = useSettingsStore((s) => s.xtermKeybindings);
 
   useEffect(() => {
     if (!isActive) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if a keybinding input is being recorded
       const activeElement = document.activeElement;
       if (activeElement?.hasAttribute('data-keybinding-recording')) {
         return;
       }
 
-      const binding = terminalKeybindings[keybinding];
+      const binding = xtermKeybindings[keybinding];
       if (matchesKeybinding(e, binding)) {
         e.preventDefault();
         e.stopPropagation();
@@ -39,5 +30,5 @@ export function useKeybindingInterceptor(
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isActive, keybinding, terminalKeybindings, onMatch]);
+  }, [isActive, keybinding, xtermKeybindings, onMatch]);
 }

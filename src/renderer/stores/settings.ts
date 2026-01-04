@@ -129,7 +129,7 @@ export const BUILTIN_AGENT_IDS: BuiltinAgentId[] = [
   'opencode',
 ];
 
-// Terminal keybindings
+// Keybinding definition
 export interface TerminalKeybinding {
   key: string;
   ctrl?: boolean;
@@ -138,27 +138,11 @@ export interface TerminalKeybinding {
   meta?: boolean;
 }
 
-export interface TerminalKeybindings {
-  clear: TerminalKeybinding;
-  newTab: TerminalKeybinding;
-  closeTab: TerminalKeybinding;
-  nextTab: TerminalKeybinding;
-  prevTab: TerminalKeybinding;
-}
-
 // Main tab switching keybindings
 export interface MainTabKeybindings {
   switchToAgent: TerminalKeybinding;
   switchToFile: TerminalKeybinding;
   switchToTerminal: TerminalKeybinding;
-}
-
-// Agent session keybindings
-export interface AgentKeybindings {
-  newSession: TerminalKeybinding;
-  closeSession: TerminalKeybinding;
-  nextSession: TerminalKeybinding;
-  prevSession: TerminalKeybinding;
 }
 
 // Source control keybindings
@@ -172,6 +156,22 @@ export interface SearchKeybindings {
   searchFiles: TerminalKeybinding;
   searchContent: TerminalKeybinding;
 }
+
+// Unified xterm keybindings (for Terminal, Agent, and all xterm-based components)
+export interface XtermKeybindings {
+  newTab: TerminalKeybinding;
+  closeTab: TerminalKeybinding;
+  nextTab: TerminalKeybinding;
+  prevTab: TerminalKeybinding;
+  split: TerminalKeybinding;
+  merge: TerminalKeybinding;
+  clear: TerminalKeybinding;
+}
+
+// Legacy aliases for backward compatibility
+export type TerminalKeybindings = XtermKeybindings;
+export type AgentKeybindings = XtermKeybindings;
+export type TerminalPaneKeybindings = XtermKeybindings;
 
 // Status Line display field settings
 export interface StatusLineFieldSettings {
@@ -381,35 +381,30 @@ export const defaultEditorSettings: EditorSettings = {
   autoSaveDelay: 1000,
 };
 
-export const defaultTerminalKeybindings: TerminalKeybindings = {
-  clear: { key: 'r', meta: true }, // Cmd/Win+R
-  newTab: { key: 't', ctrl: true },
-  closeTab: { key: 'w', ctrl: true },
-  nextTab: { key: ']', ctrl: true },
-  prevTab: { key: '[', ctrl: true },
+export const defaultXtermKeybindings: XtermKeybindings = {
+  newTab: { key: 't', meta: true },
+  closeTab: { key: 'w', meta: true },
+  nextTab: { key: ']', meta: true },
+  prevTab: { key: '[', meta: true },
+  split: { key: 'd', meta: true },
+  merge: { key: 'd', meta: true, shift: true },
+  clear: { key: 'r', meta: true },
 };
 
 export const defaultMainTabKeybindings: MainTabKeybindings = {
-  switchToAgent: { key: '1', ctrl: true }, // Ctrl+1
-  switchToFile: { key: '2', ctrl: true }, // Ctrl+2
-  switchToTerminal: { key: '3', ctrl: true }, // Ctrl+3
-};
-
-export const defaultAgentKeybindings: AgentKeybindings = {
-  newSession: { key: 't', meta: true, shift: true }, // Cmd/Win+Shift+T
-  closeSession: { key: 'w', meta: true, shift: true }, // Cmd/Win+Shift+W
-  nextSession: { key: ']', meta: true }, // Cmd/Win+]
-  prevSession: { key: '[', meta: true }, // Cmd/Win+[
+  switchToAgent: { key: '1', ctrl: true },
+  switchToFile: { key: '2', ctrl: true },
+  switchToTerminal: { key: '3', ctrl: true },
 };
 
 export const defaultSourceControlKeybindings: SourceControlKeybindings = {
-  prevDiff: { key: 'F7' }, // F7
-  nextDiff: { key: 'F8' }, // F8
+  prevDiff: { key: 'F7' },
+  nextDiff: { key: 'F8' },
 };
 
 export const defaultSearchKeybindings: SearchKeybindings = {
-  searchFiles: { key: 'p', meta: true }, // Cmd/Win+P
-  searchContent: { key: 'f', meta: true, shift: true }, // Cmd/Win+Shift+F
+  searchFiles: { key: 'p', meta: true },
+  searchContent: { key: 'f', meta: true, shift: true },
 };
 
 interface SettingsState {
@@ -425,9 +420,8 @@ interface SettingsState {
   terminalTheme: string;
   terminalRenderer: TerminalRenderer;
   terminalScrollback: number;
-  terminalKeybindings: TerminalKeybindings;
+  xtermKeybindings: XtermKeybindings;
   mainTabKeybindings: MainTabKeybindings;
-  agentKeybindings: AgentKeybindings;
   sourceControlKeybindings: SourceControlKeybindings;
   searchKeybindings: SearchKeybindings;
   editorSettings: EditorSettings;
@@ -462,9 +456,8 @@ interface SettingsState {
   setTerminalTheme: (theme: string) => void;
   setTerminalRenderer: (renderer: TerminalRenderer) => void;
   setTerminalScrollback: (scrollback: number) => void;
-  setTerminalKeybindings: (keybindings: TerminalKeybindings) => void;
+  setXtermKeybindings: (keybindings: XtermKeybindings) => void;
   setMainTabKeybindings: (keybindings: MainTabKeybindings) => void;
-  setAgentKeybindings: (keybindings: AgentKeybindings) => void;
   setSourceControlKeybindings: (keybindings: SourceControlKeybindings) => void;
   setSearchKeybindings: (keybindings: SearchKeybindings) => void;
   setEditorSettings: (settings: Partial<EditorSettings>) => void;
@@ -537,9 +530,8 @@ export const useSettingsStore = create<SettingsState>()(
       terminalTheme: 'Dracula',
       terminalRenderer: 'dom',
       terminalScrollback: 10000,
-      terminalKeybindings: defaultTerminalKeybindings,
+      xtermKeybindings: defaultXtermKeybindings,
       mainTabKeybindings: defaultMainTabKeybindings,
-      agentKeybindings: defaultAgentKeybindings,
       sourceControlKeybindings: defaultSourceControlKeybindings,
       searchKeybindings: defaultSearchKeybindings,
       editorSettings: defaultEditorSettings,
@@ -603,9 +595,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setTerminalRenderer: (terminalRenderer) => set({ terminalRenderer }),
       setTerminalScrollback: (terminalScrollback) => set({ terminalScrollback }),
-      setTerminalKeybindings: (terminalKeybindings) => set({ terminalKeybindings }),
+      setXtermKeybindings: (xtermKeybindings) => set({ xtermKeybindings }),
       setMainTabKeybindings: (mainTabKeybindings) => set({ mainTabKeybindings }),
-      setAgentKeybindings: (agentKeybindings) => set({ agentKeybindings }),
       setSourceControlKeybindings: (sourceControlKeybindings) => set({ sourceControlKeybindings }),
       setSearchKeybindings: (searchKeybindings) => set({ searchKeybindings }),
       setEditorSettings: (settings) =>
@@ -814,18 +805,57 @@ export const useSettingsStore = create<SettingsState>()(
           ...persisted,
           // Override with migrated value
           ...(terminalRenderer && { terminalRenderer }),
-          // Deep merge keybindings to ensure new fields get default values
-          terminalKeybindings: {
-            ...currentState.terminalKeybindings,
-            ...persisted.terminalKeybindings,
-          },
+          xtermKeybindings: (() => {
+            const filterDefined = <T extends object>(obj: T): Partial<T> =>
+              Object.fromEntries(
+                Object.entries(obj).filter(([, v]) => v !== undefined)
+              ) as Partial<T>;
+
+            type LegacyAgentKeybindings = {
+              newSession?: TerminalKeybinding;
+              closeSession?: TerminalKeybinding;
+              nextSession?: TerminalKeybinding;
+              prevSession?: TerminalKeybinding;
+            };
+            type LegacyPaneKeybindings = {
+              split?: TerminalKeybinding;
+              merge?: TerminalKeybinding;
+            };
+
+            const legacy = persisted as {
+              terminalKeybindings?: Partial<XtermKeybindings>;
+              agentKeybindings?: LegacyAgentKeybindings;
+              terminalPaneKeybindings?: LegacyPaneKeybindings;
+            };
+
+            return {
+              ...currentState.xtermKeybindings,
+              ...persisted.xtermKeybindings,
+              ...(legacy.terminalKeybindings &&
+                filterDefined({
+                  newTab: legacy.terminalKeybindings.newTab,
+                  closeTab: legacy.terminalKeybindings.closeTab,
+                  nextTab: legacy.terminalKeybindings.nextTab,
+                  prevTab: legacy.terminalKeybindings.prevTab,
+                  clear: legacy.terminalKeybindings.clear,
+                })),
+              ...(legacy.agentKeybindings &&
+                filterDefined({
+                  newTab: legacy.agentKeybindings.newSession,
+                  closeTab: legacy.agentKeybindings.closeSession,
+                  nextTab: legacy.agentKeybindings.nextSession,
+                  prevTab: legacy.agentKeybindings.prevSession,
+                })),
+              ...(legacy.terminalPaneKeybindings &&
+                filterDefined({
+                  split: legacy.terminalPaneKeybindings.split,
+                  merge: legacy.terminalPaneKeybindings.merge,
+                })),
+            };
+          })(),
           mainTabKeybindings: {
             ...currentState.mainTabKeybindings,
             ...persisted.mainTabKeybindings,
-          },
-          agentKeybindings: {
-            ...currentState.agentKeybindings,
-            ...persisted.agentKeybindings,
           },
           sourceControlKeybindings: {
             ...currentState.sourceControlKeybindings,

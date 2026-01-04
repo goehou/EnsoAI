@@ -107,7 +107,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     agentSettings,
     agentDetectionStatus,
     customAgents,
-    agentKeybindings,
+    xtermKeybindings,
     hapiSettings,
     autoCreateSessionOnActivate,
   } = useSettingsStore();
@@ -867,20 +867,17 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     });
   }, [allSessions]);
 
-  // Agent session keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isActive) return;
 
-      // New session
-      if (matchesKeybinding(e, agentKeybindings.newSession)) {
+      if (matchesKeybinding(e, xtermKeybindings.newTab)) {
         e.preventDefault();
         handleNewSession();
         return;
       }
 
-      // Close session
-      if (matchesKeybinding(e, agentKeybindings.closeSession)) {
+      if (matchesKeybinding(e, xtermKeybindings.closeTab)) {
         e.preventDefault();
         const activeGroup = groups.find((g) => g.id === activeGroupId);
         if (activeGroup?.activeSessionId) {
@@ -889,21 +886,18 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
         return;
       }
 
-      // Next session
-      if (matchesKeybinding(e, agentKeybindings.nextSession)) {
+      if (matchesKeybinding(e, xtermKeybindings.nextTab)) {
         e.preventDefault();
         handleNextSession();
         return;
       }
 
-      // Prev session
-      if (matchesKeybinding(e, agentKeybindings.prevSession)) {
+      if (matchesKeybinding(e, xtermKeybindings.prevTab)) {
         e.preventDefault();
         handlePrevSession();
         return;
       }
 
-      // Bonus: Cmd/Win+1-9 to switch to specific session in active group
       if (e.metaKey && e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         const activeGroup = groups.find((g) => g.id === activeGroupId);
         if (activeGroup) {
@@ -922,7 +916,7 @@ export function AgentPanel({ repoPath, cwd, isActive = false, onSwitchWorktree }
     isActive,
     groups,
     activeGroupId,
-    agentKeybindings,
+    xtermKeybindings,
     handleNewSession,
     handleCloseSession,
     handleNextSession,

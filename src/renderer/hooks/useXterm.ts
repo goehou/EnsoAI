@@ -47,6 +47,12 @@ export interface UseXtermOptions {
   onCustomKey?: (event: KeyboardEvent, ptyId: string) => boolean;
   /** Called when terminal title changes (via OSC escape sequence) */
   onTitleChange?: (title: string) => void;
+  /** Called when split pane shortcut is triggered */
+  onSplit?: () => void;
+  /** Called when merge pane shortcut is triggered */
+  onMerge?: () => void;
+  /** Whether merge is allowed (has multiple panes) */
+  canMerge?: boolean;
 }
 
 export interface UseXtermResult {
@@ -85,7 +91,7 @@ function useTerminalSettings() {
     terminalFontWeight,
     terminalFontWeightBold,
     terminalScrollback,
-    agentKeybindings,
+    xtermKeybindings,
   } = useSettingsStore();
 
   const theme = useMemo(() => {
@@ -99,7 +105,7 @@ function useTerminalSettings() {
     fontWeight: terminalFontWeight,
     fontWeightBold: terminalFontWeightBold,
     scrollback: terminalScrollback,
-    agentKeybindings,
+    xtermKeybindings,
   };
 }
 
@@ -112,6 +118,9 @@ export function useXterm({
   onData,
   onCustomKey,
   onTitleChange,
+  onSplit,
+  onMerge,
+  canMerge = false,
 }: UseXtermOptions): UseXtermResult {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -136,6 +145,12 @@ export function useXterm({
   onCustomKeyRef.current = onCustomKey;
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
+  const onSplitRef = useRef(onSplit);
+  onSplitRef.current = onSplit;
+  const onMergeRef = useRef(onMerge);
+  onMergeRef.current = onMerge;
+  const canMergeRef = useRef(canMerge);
+  canMergeRef.current = canMerge;
   const hasBeenActivatedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const hasReceivedDataRef = useRef(false);
@@ -374,15 +389,23 @@ export function useXterm({
 
     // Custom key handler
     terminal.attachCustomKeyEventHandler((event) => {
-      // Let agent session shortcuts bubble up to window handlers
-      // Check against configured keybindings instead of hardcoded keys
       if (
-        matchesKeybinding(event, settings.agentKeybindings.newSession) ||
-        matchesKeybinding(event, settings.agentKeybindings.closeSession) ||
-        matchesKeybinding(event, settings.agentKeybindings.nextSession) ||
-        matchesKeybinding(event, settings.agentKeybindings.prevSession)
+        matchesKeybinding(event, settings.xtermKeybindings.newTab) ||
+        matchesKeybinding(event, settings.xtermKeybindings.closeTab) ||
+        matchesKeybinding(event, settings.xtermKeybindings.nextTab) ||
+        matchesKeybinding(event, settings.xtermKeybindings.prevTab)
       ) {
         return false;
+      }
+      if (event.type === 'keydown') {
+        if (matchesKeybinding(event, settings.xtermKeybindings.split)) {
+          onSplitRef.current?.();
+          return false;
+        }
+        if (canMergeRef.current && matchesKeybinding(event, settings.xtermKeybindings.merge)) {
+          onMergeRef.current?.();
+          return false;
+        }
       }
       // Cmd/Ctrl+1-9 (switch to tab by number)
       if (

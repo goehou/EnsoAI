@@ -41,10 +41,13 @@ export function ShellTerminal({
     isActive,
     onExit,
     onTitleChange,
+    onSplit,
+    onMerge,
+    canMerge,
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
-  const terminalKeybindings = useSettingsStore((state) => state.terminalKeybindings);
+  const xtermKeybindings = useSettingsStore((state) => state.xtermKeybindings);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -60,14 +63,13 @@ export function ShellTerminal({
         return;
       }
 
-      // Clear terminal shortcut
-      if (matchesKeybinding(e, terminalKeybindings.clear)) {
+      if (matchesKeybinding(e, xtermKeybindings.clear)) {
         e.preventDefault();
         clear();
         return;
       }
     },
-    [isSearchOpen, terminalKeybindings, clear]
+    [isSearchOpen, xtermKeybindings, clear]
   );
 
   // Handle right-click context menu

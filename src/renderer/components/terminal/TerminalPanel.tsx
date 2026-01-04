@@ -47,7 +47,7 @@ export function TerminalPanel({ cwd, isActive = false }: TerminalPanelProps) {
   const [worktreeStates, setWorktreeStates] = useState<WorktreeGroupStates>({});
   // Global terminal IDs to keep terminals mounted across group moves
   const [globalTerminalIds, setGlobalTerminalIds] = useState<Set<string>>(new Set());
-  const terminalKeybindings = useSettingsStore((state) => state.terminalKeybindings);
+  const xtermKeybindings = useSettingsStore((state) => state.xtermKeybindings);
   const autoCreateSessionOnActivate = useSettingsStore(
     (state) => state.autoCreateSessionOnActivate
   );
@@ -574,15 +574,13 @@ export function TerminalPanel({ cwd, isActive = false }: TerminalPanelProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isActive) return;
 
-      // New tab
-      if (matchesKeybinding(e, terminalKeybindings.newTab)) {
+      if (matchesKeybinding(e, xtermKeybindings.newTab)) {
         e.preventDefault();
         handleNewTerminal();
         return;
       }
 
-      // Close tab
-      if (matchesKeybinding(e, terminalKeybindings.closeTab)) {
+      if (matchesKeybinding(e, xtermKeybindings.closeTab)) {
         e.preventDefault();
         const activeGroup = groups.find((g) => g.id === activeGroupId);
         if (activeGroup?.activeTabId) {
@@ -598,8 +596,7 @@ export function TerminalPanel({ cwd, isActive = false }: TerminalPanelProps) {
         return;
       }
 
-      // Next/Prev tab within active group
-      if (matchesKeybinding(e, terminalKeybindings.nextTab)) {
+      if (matchesKeybinding(e, xtermKeybindings.nextTab)) {
         e.preventDefault();
         const activeGroup = groups.find((g) => g.id === activeGroupId);
         if (activeGroup && activeGroup.tabs.length > 1) {
@@ -610,7 +607,7 @@ export function TerminalPanel({ cwd, isActive = false }: TerminalPanelProps) {
         return;
       }
 
-      if (matchesKeybinding(e, terminalKeybindings.prevTab)) {
+      if (matchesKeybinding(e, xtermKeybindings.prevTab)) {
         e.preventDefault();
         const activeGroup = groups.find((g) => g.id === activeGroupId);
         if (activeGroup && activeGroup.tabs.length > 1) {
@@ -641,7 +638,7 @@ export function TerminalPanel({ cwd, isActive = false }: TerminalPanelProps) {
     isActive,
     groups,
     activeGroupId,
-    terminalKeybindings,
+    xtermKeybindings,
     handleNewTerminal,
     handleTabsChange,
     handleGroupEmpty,

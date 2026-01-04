@@ -414,12 +414,15 @@ export function AgentTerminal({
     onData: handleData,
     onCustomKey: handleCustomKey,
     onTitleChange: handleTitleChange,
+    onSplit,
+    onMerge,
+    canMerge,
   });
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBarRef = useRef<TerminalSearchBarRef>(null);
 
   // Handle Cmd+F / Ctrl+F
-  const handleSearchKeyDown = useCallback(
+  const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
@@ -489,9 +492,9 @@ export function AgentTerminal({
 
   useEffect(() => {
     if (!isActive) return;
-    window.addEventListener('keydown', handleSearchKeyDown);
-    return () => window.removeEventListener('keydown', handleSearchKeyDown);
-  }, [isActive, handleSearchKeyDown]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isActive, handleKeyDown]);
 
   useEffect(() => {
     const container = containerRef.current;

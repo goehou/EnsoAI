@@ -139,10 +139,10 @@ export function ShellTerminal({
 
   return (
     <div
-      className="relative h-full w-full px-[5px] py-[2px]"
+      className="relative h-full w-full"
       style={{ backgroundColor: settings.theme.background, contain: 'strict' }}
     >
-      <div ref={containerRef} className="h-full w-full" />
+      <div ref={containerRef} className="h-full w-full px-[5px] py-[2px]" />
       <TerminalSearchBar
         ref={searchBarRef}
         isOpen={isSearchOpen}

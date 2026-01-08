@@ -41,8 +41,8 @@ export function SearchPreviewPanel({ path, line, query }: SearchPreviewPanelProp
     setIsLoading(true);
     window.electronAPI.file
       .read(path)
-      .then((text) => {
-        setContent(text);
+      .then(({ content }) => {
+        setContent(content);
       })
       .catch(() => {
         setContent(null);

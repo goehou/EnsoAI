@@ -15,6 +15,7 @@ import type {
   FileChangesResult,
   FileDiff,
   FileEntry,
+  FileReadResult,
   FileSearchParams,
   FileSearchResult,
   GhCliStatus,
@@ -186,10 +187,10 @@ const electronAPI = {
 
   // Files
   file: {
-    read: (filePath: string): Promise<string> =>
+    read: (filePath: string): Promise<FileReadResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILE_READ, filePath),
-    write: (filePath: string, content: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.FILE_WRITE, filePath, content),
+    write: (filePath: string, content: string, encoding?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FILE_WRITE, filePath, content, encoding),
     createFile: (
       filePath: string,
       content = '',

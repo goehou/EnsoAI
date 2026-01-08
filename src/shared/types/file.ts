@@ -11,3 +11,10 @@ export interface FileChangeEvent {
   type: 'create' | 'update' | 'delete';
   path: string;
 }
+
+export interface FileReadResult {
+  content: string;
+  encoding: string;
+  detectedEncoding: string;
+  confidence: number;
+}

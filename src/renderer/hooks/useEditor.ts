@@ -25,9 +25,9 @@ export function useEditor() {
 
   const loadFile = useMutation({
     mutationFn: async (path: string) => {
-      const content = await window.electronAPI.file.read(path);
-      openFile({ path, content, isDirty: false });
-      return content;
+      const { content, encoding } = await window.electronAPI.file.read(path);
+      openFile({ path, content, encoding, isDirty: false });
+      return { content, encoding };
     },
   });
 
@@ -35,7 +35,7 @@ export function useEditor() {
     mutationFn: async (path: string) => {
       const file = tabs.find((f) => f.path === path);
       if (!file) throw new Error('File not found');
-      await window.electronAPI.file.write(path, file.content);
+      await window.electronAPI.file.write(path, file.content, file.encoding);
       markFileSaved(path);
     },
     onSuccess: () => {
@@ -52,10 +52,9 @@ export function useEditor() {
         setActiveFile(path);
       } else {
         try {
-          const content = await window.electronAPI.file.read(path);
-          openFile({ path, content, isDirty: false });
+          const { content, encoding } = await window.electronAPI.file.read(path);
+          openFile({ path, content, encoding, isDirty: false });
         } catch {
-          // File doesn't exist or can't be read
           return;
         }
       }

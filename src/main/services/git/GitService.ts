@@ -18,6 +18,7 @@ import type {
 import simpleGit, { type SimpleGit, type StatusResult } from 'simple-git';
 import { getProxyEnvVars } from '../proxy/ProxyConfig';
 import { getEnhancedPath } from '../terminal/PtyManager';
+import { decodeBuffer, gitShow } from './encoding';
 
 const execAsync = promisify(exec);
 
@@ -269,18 +270,20 @@ export class GitService {
     let original = '';
     let modified = '';
 
-    // Get original content from HEAD (or index for staged)
     if (staged) {
-      // For staged: compare HEAD vs index
-      original = await this.git.show([`HEAD:${filePath}`]).catch(() => '');
-      modified = await this.git.show([`:${filePath}`]).catch(() => '');
+      [original, modified] = await Promise.all([
+        gitShow(this.workdir, `HEAD:${filePath}`),
+        gitShow(this.workdir, `:${filePath}`),
+      ]);
     } else {
-      // For unstaged: compare index vs working tree
-      original = await this.git.show([`:${filePath}`]).catch(() => {
-        // If not in index, try HEAD
-        return this.git.show([`HEAD:${filePath}`]).catch(() => '');
-      });
-      modified = await fs.readFile(absolutePath, 'utf-8').catch(() => '');
+      original = await gitShow(this.workdir, `:${filePath}`);
+      if (!original) {
+        original = await gitShow(this.workdir, `HEAD:${filePath}`);
+      }
+      modified = await fs
+        .readFile(absolutePath)
+        .then((buffer) => decodeBuffer(buffer))
+        .catch(() => '');
     }
 
     return { path: filePath, original, modified };

@@ -478,7 +478,8 @@ export function DiffViewer({
     setIsSaving(true);
     try {
       const absolutePath = `${rootPath}/${file.path}`;
-      await window.electronAPI.file.write(absolutePath, editedContent);
+      const { encoding } = await window.electronAPI.file.read(absolutePath);
+      await window.electronAPI.file.write(absolutePath, editedContent, encoding);
 
       await queryClient.invalidateQueries({
         queryKey: ['git', 'file-diff', rootPath, file.path],

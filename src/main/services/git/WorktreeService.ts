@@ -1,6 +1,7 @@
 import { exec } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   ConflictResolution,
@@ -14,7 +15,10 @@ import type {
   WorktreeMergeResult,
   WorktreeRemoveOptions,
 } from '@shared/types';
+import iconv from 'iconv-lite';
+import jschardet from 'jschardet';
 import simpleGit, { type SimpleGit } from 'simple-git';
+import { gitShow } from './encoding';
 
 const execAsync = promisify(exec);
 
@@ -462,55 +466,31 @@ export class WorktreeService {
     }));
   }
 
-  /**
-   * Get content for conflict resolution (ours, theirs, base)
-   */
   async getConflictContent(workdir: string, filePath: string): Promise<MergeConflictContent> {
-    const git = simpleGit(workdir);
+    const [ours, theirs, base] = await Promise.all([
+      gitShow(workdir, `:2:${filePath}`),
+      gitShow(workdir, `:3:${filePath}`),
+      gitShow(workdir, `:1:${filePath}`),
+    ]);
 
-    // Get ours (target branch - stage 2)
-    let ours = '';
-    try {
-      ours = await git.show([`:2:${filePath}`]);
-    } catch {
-      ours = '';
-    }
-
-    // Get theirs (source branch - stage 3)
-    let theirs = '';
-    try {
-      theirs = await git.show([`:3:${filePath}`]);
-    } catch {
-      theirs = '';
-    }
-
-    // Get base (common ancestor - stage 1)
-    let base = '';
-    try {
-      base = await git.show([`:1:${filePath}`]);
-    } catch {
-      base = '';
-    }
-
-    return {
-      file: filePath,
-      ours,
-      theirs,
-      base,
-    };
+    return { file: filePath, ours, theirs, base };
   }
 
-  /**
-   * Resolve a conflict by writing the resolved content
-   */
   async resolveConflict(workdir: string, resolution: ConflictResolution): Promise<void> {
-    const { writeFile } = await import('node:fs/promises');
-    const { join } = await import('node:path');
-
     const filePath = join(workdir, resolution.file);
-    await writeFile(filePath, resolution.content, 'utf-8');
 
-    // Stage the resolved file
+    let encoding = 'utf-8';
+    try {
+      const buffer = await readFile(filePath);
+      const detected = jschardet.detect(buffer);
+      if (detected?.encoding) {
+        encoding = detected.encoding.toLowerCase();
+      }
+    } catch {}
+
+    const buffer = iconv.encode(resolution.content, encoding);
+    await writeFile(filePath, buffer);
+
     const git = simpleGit(workdir);
     await git.add(resolution.file);
   }

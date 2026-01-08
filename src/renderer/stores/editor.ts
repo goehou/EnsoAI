@@ -5,7 +5,8 @@ export interface EditorTab {
   title: string;
   content: string;
   isDirty: boolean;
-  viewState?: unknown; // Monaco editor view state
+  encoding?: string;
+  viewState?: unknown;
 }
 
 export interface PendingCursor {

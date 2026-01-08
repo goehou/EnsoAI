@@ -198,17 +198,13 @@ export function EditorArea({
       const changedTab = tabs.find((tab) => tab.path === event.path);
       if (!changedTab) return;
 
-      // Read the latest content from disk
       try {
-        const latestContent = await window.electronAPI.file.read(event.path);
-        // Update the tab content
+        const { content: latestContent } = await window.electronAPI.file.read(event.path);
         onContentChange(event.path, latestContent, changedTab.isDirty);
 
-        // If this is the active tab, update the editor content
         if (event.path === activeTabPath && editorRef.current) {
           const editor = editorRef.current;
           const currentValue = editor.getValue();
-          // Only update if content is different to avoid cursor jump
           if (currentValue !== latestContent) {
             const position = editor.getPosition();
             editor.setValue(latestContent);
@@ -605,12 +601,9 @@ export function EditorArea({
         shouldAutoSaveOnClose
       ) {
         const currentContent = editorRef.current.getValue();
-        // Sync content to store and mark as not dirty (isDirty: false)
+        const tab = tabs.find((t) => t.path === path);
         onContentChange(path, currentContent, false);
-        // Save to disk directly (await to ensure it completes before closing)
-        await window.electronAPI.file.write(path, currentContent);
-        // Note: We don't call onSave here because we already wrote the file directly above.
-        // Calling onSave would trigger saveFile.mutate which writes the file again.
+        await window.electronAPI.file.write(path, currentContent, tab?.encoding);
         hasPendingAutoSaveRef.current = false;
       }
 
@@ -634,6 +627,7 @@ export function EditorArea({
       cancelDebouncedSave,
       editorSettings.autoSave,
       onContentChange,
+      tabs,
     ]
   );
 

@@ -1,9 +1,61 @@
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { type FileEntry, IPC_CHANNELS } from '@shared/types';
+import { type FileEntry, type FileReadResult, IPC_CHANNELS } from '@shared/types';
 import { BrowserWindow, ipcMain } from 'electron';
+import iconv from 'iconv-lite';
+import jschardet from 'jschardet';
 import simpleGit from 'simple-git';
 import { FileWatcher } from '../services/files/FileWatcher';
+
+/**
+ * Normalize encoding name to a consistent format
+ */
+function normalizeEncoding(encoding: string): string {
+  const normalized = encoding.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const encodingMap: Record<string, string> = {
+    gb2312: 'gb2312',
+    gbk: 'gbk',
+    gb18030: 'gb18030',
+    big5: 'big5',
+    shiftjis: 'shift_jis',
+    eucjp: 'euc-jp',
+    euckr: 'euc-kr',
+    iso88591: 'iso-8859-1',
+    windows1252: 'windows-1252',
+    utf8: 'utf-8',
+    utf16le: 'utf-16le',
+    utf16be: 'utf-16be',
+    ascii: 'ascii',
+  };
+  return encodingMap[normalized] || encoding;
+}
+
+/**
+ * Detect file encoding from buffer
+ */
+function detectEncoding(buffer: Buffer): { encoding: string; confidence: number } {
+  // Check for BOM first
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return { encoding: 'utf-8', confidence: 1 };
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return { encoding: 'utf-16le', confidence: 1 };
+  }
+  if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return { encoding: 'utf-16be', confidence: 1 };
+  }
+
+  const result = jschardet.detect(buffer);
+  if (result?.encoding) {
+    return {
+      encoding: normalizeEncoding(result.encoding),
+      confidence: result.confidence,
+    };
+  }
+
+  // Default to utf-8 if detection fails
+  return { encoding: 'utf-8', confidence: 0 };
+}
 
 const watchers = new Map<string, FileWatcher>();
 
@@ -23,14 +75,29 @@ export async function stopWatchersInDirectory(dirPath: string): Promise<void> {
 }
 
 export function registerFileHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.FILE_READ, async (_, filePath: string) => {
-    const content = await readFile(filePath, 'utf-8');
-    return content;
+  ipcMain.handle(IPC_CHANNELS.FILE_READ, async (_, filePath: string): Promise<FileReadResult> => {
+    const buffer = await readFile(filePath);
+    const { encoding: detectedEncoding, confidence } = detectEncoding(buffer);
+
+    let content: string;
+    try {
+      content = iconv.decode(buffer, detectedEncoding);
+    } catch {
+      content = buffer.toString('utf-8');
+      return { content, encoding: 'utf-8', detectedEncoding: 'utf-8', confidence: 0 };
+    }
+
+    return { content, encoding: detectedEncoding, detectedEncoding, confidence };
   });
 
-  ipcMain.handle(IPC_CHANNELS.FILE_WRITE, async (_, filePath: string, content: string) => {
-    await writeFile(filePath, content, 'utf-8');
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_WRITE,
+    async (_, filePath: string, content: string, encoding?: string) => {
+      const targetEncoding = encoding || 'utf-8';
+      const buffer = iconv.encode(content, targetEncoding);
+      await writeFile(filePath, buffer);
+    }
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.FILE_CREATE,

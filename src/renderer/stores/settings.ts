@@ -983,6 +983,15 @@ export const useSettingsStore = create<SettingsState>()(
         const effectiveState = state ?? useSettingsStore.getState();
         applyInitialSettings(effectiveState);
 
+        // 监听系统主题变化，当用户选择"跟随系统"时自动切换
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        mediaQuery.addEventListener('change', () => {
+          const currentState = useSettingsStore.getState();
+          if (currentState.theme === 'system') {
+            applyAppTheme('system', currentState.terminalTheme);
+          }
+        });
+
         if (state) {
           if (state.proxySettings) {
             window.electronAPI.app.setProxy(state.proxySettings);

@@ -11,6 +11,7 @@ import type { LanguageModel } from 'ai';
 import { createClaudeCode } from 'ai-sdk-provider-claude-code';
 import { createCodexCli } from 'ai-sdk-provider-codex-cli';
 import { createGeminiCli } from 'ai-sdk-provider-gemini-cli-agentic';
+import { killProcessTree } from '../../utils/processUtils';
 
 export type { AIProvider, ModelId, ReasoningEffort } from '@shared/types';
 
@@ -39,7 +40,13 @@ const claudeCodeProvider = createClaudeCode({
         get exitCode() {
           return proc.exitCode;
         },
-        kill: (signal) => proc.kill(signal),
+        kill: (signal) => {
+          if (isWindows) {
+            killProcessTree(proc);
+            return true;
+          }
+          return proc.kill(signal);
+        },
         on: (event, listener) => proc.on(event, listener),
         once: (event, listener) => proc.once(event, listener),
         off: (event, listener) => proc.off(event, listener),

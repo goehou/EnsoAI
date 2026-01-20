@@ -12,10 +12,19 @@ import { createClaudeCode } from 'ai-sdk-provider-claude-code';
 import { createCodexCli } from 'ai-sdk-provider-codex-cli';
 import { createGeminiProvider } from 'ai-sdk-provider-gemini-cli';
 import { killProcessTree } from '../../utils/processUtils';
+import { getEnhancedPath } from '../terminal/PtyManager';
 
 export type { AIProvider, ModelId, ReasoningEffort } from '@shared/types';
 
 const isWindows = process.platform === 'win32';
+
+// Get enhanced PATH that includes user-installed CLI paths (nvm, volta, scoop, etc.)
+function getEnhancedEnv(): Record<string, string> {
+  return {
+    ...process.env,
+    PATH: getEnhancedPath(),
+  } as Record<string, string>;
+}
 
 // Claude Code provider with read-only permissions
 const claudeCodeProvider = createClaudeCode({
@@ -57,6 +66,7 @@ const codexCliProvider = createCodexCli({
   defaultSettings: {
     codexPath: 'codex',
     sandboxMode: 'read-only',
+    env: getEnhancedEnv(),
   },
 });
 

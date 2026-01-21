@@ -295,6 +295,16 @@ export function getEnhancedPath(): string {
 export class PtyManager {
   private sessions = new Map<string, PtySession>();
   private counter = 0;
+  // 活动检测缓存：{ ptyId: { lastCheckTs, lastValue, inFlightPromise } }
+  private activityCache = new Map<
+    string,
+    {
+      lastCheckTs: number;
+      lastValue: boolean;
+      inFlightPromise: Promise<boolean> | null;
+    }
+  >();
+  private readonly ACTIVITY_CACHE_TTL_MS = 2000; // 缓存 2 秒
 
   create(
     options: TerminalCreateOptions,
@@ -431,6 +441,7 @@ export class PtyManager {
     if (session) {
       killProcessTree(session.pty);
       this.sessions.delete(id);
+      this.activityCache.delete(id);
     }
   }
 
@@ -512,41 +523,89 @@ export class PtyManager {
 
   /**
    * Check if a PTY process tree is actively using CPU.
-   * Returns true if any process in the tree has CPU activity (> 1%), false otherwise.
+   * Returns true if any process in the tree has CPU activity (> 3%), false otherwise.
    * This detects if an AI agent (running as child process) is working.
+   *
+   * Uses caching to avoid excessive system calls:
+   * - Returns cached value if checked within last 2s
+   * - Reuses in-flight promise if already checking
    */
   async getProcessActivity(id: string): Promise<boolean> {
     const session = this.sessions.get(id);
     if (!session) {
+      this.activityCache.delete(id);
       return false;
     }
 
     const pid = session.pty.pid;
     if (!pid) {
+      this.activityCache.delete(id);
       return false;
     }
 
-    try {
-      // Get entire process tree (shell + all child processes like Claude Code)
-      const pids = await pidtree(pid, { root: true });
+    const now = Date.now();
+    const cached = this.activityCache.get(id);
 
-      if (pids.length === 0) {
+    // 返回缓存值（2 秒内）
+    if (cached && now - cached.lastCheckTs < this.ACTIVITY_CACHE_TTL_MS) {
+      return cached.lastValue;
+    }
+
+    // 复用正在进行的检查
+    if (cached?.inFlightPromise) {
+      return cached.inFlightPromise;
+    }
+
+    // 执行新的活动检测
+    const checkPromise = (async () => {
+      try {
+        // Get entire process tree (shell + all child processes like Claude Code)
+        const pids = await pidtree(pid, { root: true });
+
+        if (pids.length === 0) {
+          return false;
+        }
+
+        // Get CPU usage for all processes in the tree
+        const stats = await pidusage(pids);
+
+        // 提高阈值并要求连续检测（通过缓存实现去抖效果）
+        // Check if any process has significant CPU activity
+        for (const procPid of Object.keys(stats)) {
+          if (stats[procPid]?.cpu > 3) {
+            // 提高阈值到 3%
+            return true;
+          }
+        }
         return false;
-      }
-
-      // Get CPU usage for all processes in the tree
-      const stats = await pidusage(pids);
-
-      // Check if any process has significant CPU activity
-      for (const procPid of Object.keys(stats)) {
-        if (stats[procPid]?.cpu > 1) {
-          return true;
+      } catch {
+        // Process may have exited or error getting stats
+        return false;
+      } finally {
+        // 清除 in-flight 标记
+        const cache = this.activityCache.get(id);
+        if (cache) {
+          cache.inFlightPromise = null;
         }
       }
-      return false;
-    } catch {
-      // Process may have exited or error getting stats
-      return false;
-    }
+    })();
+
+    // 缓存 promise
+    this.activityCache.set(id, {
+      lastCheckTs: now,
+      lastValue: false, // 临时值，会被下面的 await 更新
+      inFlightPromise: checkPromise,
+    });
+
+    const result = await checkPromise;
+
+    // 更新缓存值
+    this.activityCache.set(id, {
+      lastCheckTs: now,
+      lastValue: result,
+      inFlightPromise: null,
+    });
+
+    return result;
   }
 }

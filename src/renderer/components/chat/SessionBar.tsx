@@ -987,10 +987,10 @@ export function SessionBar({
                       className={cn(
                         'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors',
                         quickTerminalOpen
-                          ? 'bg-accent text-accent-foreground border-accent/50'
+                          ? 'bg-accent text-accent-foreground'
                           : quickTerminalHasProcess
-                            ? 'bg-accent/50 text-accent-foreground border-accent/30 hover:bg-accent/70'
-                            : 'text-muted-foreground border-border/50 hover:bg-accent/50 hover:text-foreground'
+                            ? 'bg-accent/50 text-accent-foreground hover:bg-accent/70'
+                            : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
                       )}
                     >
                       <Terminal className="h-3.5 w-3.5" />

@@ -1238,6 +1238,13 @@ export const useSettingsStore = create<SettingsState>()(
             window.electronAPI.app.setProxy(state.proxySettings);
           }
 
+          // Auto-start Web Inspector server if it was enabled
+          if (state.webInspectorEnabled) {
+            window.electronAPI.webInspector.start().catch((error) => {
+              console.error('[WebInspector] Failed to auto-start:', error);
+            });
+          }
+
           // TODO: Remove this cleanup block after v1.0 release (along with xtermKeybindings migration)
           window.electronAPI.settings.read().then((data) => {
             if (data && typeof data === 'object') {
